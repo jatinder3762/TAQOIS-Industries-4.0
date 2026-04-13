@@ -1,6 +1,6 @@
 ﻿import os
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 import pandas as pd
@@ -667,9 +667,9 @@ def city_status(avg_risk: float) -> str:
 class ScenarioRuntime:
     frame: int = 0
     running: bool = False
-    history: List[Dict] = None
-    advisories: List[Dict] = None
-    logs: List[str] = None
+    history: List[Dict] = field(default_factory=list)
+    advisories: List[Dict] = field(default_factory=list)
+    logs: List[str] = field(default_factory=list)
     phase: str = ""
 
 
@@ -693,6 +693,27 @@ class ScenarioSimulationController:
     @staticmethod
     def _lerp(a: float, b: float, t: float) -> float:
         return a + (b - a) * t
+
+    @staticmethod
+    def _risk_to_rgba(risk: float) -> List[int]:
+        # Smooth gradient: green -> yellow -> orange -> red
+        stops = [
+            (0.0, (87, 255, 154)),
+            (40.0, (255, 221, 87)),
+            (70.0, (255, 163, 72)),
+            (100.0, (255, 94, 126)),
+        ]
+        clamped = max(0.0, min(100.0, float(risk)))
+        for i in range(len(stops) - 1):
+            left_risk, left_color = stops[i]
+            right_risk, right_color = stops[i + 1]
+            if left_risk <= clamped <= right_risk:
+                t = (clamped - left_risk) / (right_risk - left_risk)
+                r = int(left_color[0] + (right_color[0] - left_color[0]) * t)
+                g = int(left_color[1] + (right_color[1] - left_color[1]) * t)
+                b = int(left_color[2] + (right_color[2] - left_color[2]) * t)
+                return [r, g, b, 220]
+        return [255, 94, 126, 220]
 
     def phase_for_frame(self, frame: int):
         for start, end, label, color, intensity in self.ANIM_PHASES:
@@ -734,6 +755,7 @@ class ScenarioSimulationController:
             emergency_event=(intensity >= 0.65 and self.scenario_cfg["emergency_event"]),
         )
         df = self.engine.run(sim)
+        df["sim_color_rgba"] = df["risk_score"].apply(self._risk_to_rgba)
         avg_risk = round(df["risk_score"].mean(), 1)
         max_pm25 = round(df["pm25_est"].max(), 1)
         avg_no2 = round(df["no2_est"].mean(), 1)
@@ -904,13 +926,14 @@ def render_scenario_page(city_config: dict, selected_city: str, input_reset_toke
                     get_elevation="elevation",
                     elevation_scale=8,
                     radius="radius",
-                    get_fill_color="color_rgba",
+                    get_fill_color="sim_color_rgba",
                     pickable=True,
                 )
             ],
             tooltip={"html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>PM2.5: {pm25_est}"},
         )
         st.pydeck_chart(deck, use_container_width=True)
+        st.caption("Simulation gradient: green -> yellow -> orange -> red as risk increases.")
 
     with log_col:
         st.markdown('<div class="glass">', unsafe_allow_html=True)
@@ -933,242 +956,270 @@ def render_scenario_page(city_config: dict, selected_city: str, input_reset_toke
             controller.add_log("[DONE] Playback completed. Ready for re-run.")
 
 
-st.markdown(
-    """
-    <div class="hero">
-      <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
-        <div>
-          <div style="font-size:0.85rem; color:#8bb8c8; letter-spacing:0.12em; text-transform:uppercase;">Toronto Air Quality Operations Intelligence System</div>
-                    <h1 class="hero-title" style="margin:0.2rem 0 0.35rem 0;">TAQOIS / Command and Control Center</h1>
-                    <div class="hero-subtitle">Cyberpunk-Enterprise simulation platform for corridor-level air quality stress testing, response orchestration, and executive intelligence.</div>
-        </div>
-        <div>
-          <span class="alert-chip" style="background:rgba(67,200,230,0.12); color:#8ed8ea;">3D Geospatial Ops</span>
-          <span class="alert-chip" style="background:rgba(158,166,255,0.12); color:#c2c7ff;">Gemini COO</span>
-          <span class="alert-chip" style="background:rgba(102,208,162,0.12); color:#8fe0bc;">Simulation Engine</span>
-        </div>
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+@dataclass
+class SidebarControls:
+    page: str
+    selected_city: str
+    traffic_volume: int
+    inversion_strength: int
+    industrial_activity: int
+    wind_speed: int
+    humidity: int
+    emergency_event: bool
 
-with st.sidebar:
-    st.header("TAQOIS Navigation")
-    page = st.radio(
-        "page_nav",
-        ["Dashboard", "Scenario Simulation"],
-        label_visibility="collapsed",
-    )
-    st.markdown("---")
-    st.subheader("Simulation Controls")
-    selected_city = st.selectbox("City", list(CITY_PRESETS.keys()), index=0)
-    st.caption("Use this to switch the simulation focus city.")
 
-    traffic_volume = st.slider("Traffic Volume", 0, 100, 72)
-    inversion_strength = st.slider("Weather Inversion", 0, 100, 58)
-    industrial_activity = st.slider("Industrial Activity", 0, 100, 61)
-    wind_speed = st.slider("Wind Speed (km/h)", 0, 60, 18)
-    humidity = st.slider("Humidity (%)", 10, 100, 67)
-    emergency_event = st.toggle("Special Event / Incident Surge", value=False)
+class TAQOISApp:
+    def render_hero(self) -> None:
+        st.markdown(
+            """
+            <div class="hero">
+              <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
+                <div>
+                  <div style="font-size:0.85rem; color:#8bb8c8; letter-spacing:0.12em; text-transform:uppercase;">Toronto Air Quality Operations Intelligence System</div>
+                  <h1 class="hero-title" style="margin:0.2rem 0 0.35rem 0;">TAQOIS / Command and Control Center</h1>
+                  <div class="hero-subtitle">Cyberpunk-Enterprise simulation platform for corridor-level air quality stress testing, response orchestration, and executive intelligence.</div>
+                </div>
+                <div>
+                  <span class="alert-chip" style="background:rgba(67,200,230,0.12); color:#8ed8ea;">3D Geospatial Ops</span>
+                  <span class="alert-chip" style="background:rgba(158,166,255,0.12); color:#c2c7ff;">Gemini COO</span>
+                  <span class="alert-chip" style="background:rgba(102,208,162,0.12); color:#8fe0bc;">Simulation Engine</span>
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("---")
-    st.caption("Gemini 2.5 Flash")
-    st.code("Set GEMINI_API_KEY in your environment to enable live AI briefings.", language="bash")
+    def render_sidebar(self) -> SidebarControls:
+        with st.sidebar:
+            st.header("TAQOIS Navigation")
+            page = st.radio("page_nav", ["Dashboard", "Scenario Simulation"], label_visibility="collapsed")
+            st.markdown("---")
+            st.subheader("Simulation Controls")
+            selected_city = st.selectbox("City", list(CITY_PRESETS.keys()), index=0)
+            st.caption("Use this to switch the simulation focus city.")
 
-city_config = CITY_PRESETS[selected_city]
-corridors = city_config["corridors"]
-city_center = city_config["center"]
+            traffic_volume = st.slider("Traffic Volume", 0, 100, 72)
+            inversion_strength = st.slider("Weather Inversion", 0, 100, 58)
+            industrial_activity = st.slider("Industrial Activity", 0, 100, 61)
+            wind_speed = st.slider("Wind Speed (km/h)", 0, 60, 18)
+            humidity = st.slider("Humidity (%)", 10, 100, 67)
+            emergency_event = st.toggle("Special Event / Incident Surge", value=False)
 
-if page == "Scenario Simulation":
-    scenario_input_token = f"{traffic_volume}|{inversion_strength}|{industrial_activity}|{wind_speed}|{humidity}|{int(emergency_event)}"
-    render_scenario_page(city_config, selected_city, scenario_input_token)
-    st.stop()
+            st.markdown("---")
+            st.caption("Gemini 2.5 Flash")
+            st.code("Set GEMINI_API_KEY in your environment to enable live AI briefings.", language="bash")
 
-sim_inputs = SimulationInputs(
-    traffic_volume=traffic_volume,
-    inversion_strength=inversion_strength,
-    industrial_activity=industrial_activity,
-    wind_speed=wind_speed,
-    humidity=humidity,
-    emergency_event=emergency_event,
-)
+        return SidebarControls(
+            page=page,
+            selected_city=selected_city,
+            traffic_volume=traffic_volume,
+            inversion_strength=inversion_strength,
+            industrial_activity=industrial_activity,
+            wind_speed=wind_speed,
+            humidity=humidity,
+            emergency_event=emergency_event,
+        )
 
-engine = SimulationEngine(corridors)
-df = engine.run(sim_inputs)
+    def render_dashboard(self, controls: SidebarControls, city_config: Dict) -> None:
+        sim_inputs = SimulationInputs(
+            traffic_volume=controls.traffic_volume,
+            inversion_strength=controls.inversion_strength,
+            industrial_activity=controls.industrial_activity,
+            wind_speed=controls.wind_speed,
+            humidity=controls.humidity,
+            emergency_event=controls.emergency_event,
+        )
+        engine = SimulationEngine(city_config["corridors"])
+        df = engine.run(sim_inputs)
 
-avg_risk = round(df["risk_score"].mean(), 1)
-max_risk = round(df["risk_score"].max(), 1)
-hotspots = int((df["risk_score"] >= 75).sum())
-status = city_status(avg_risk)
-worst = df.iloc[0]["corridor"]
+        avg_risk = round(df["risk_score"].mean(), 1)
+        max_risk = round(df["risk_score"].max(), 1)
+        hotspots = int((df["risk_score"] >= 75).sum())
+        status = city_status(avg_risk)
+        worst = df.iloc[0]["corridor"]
 
-st.markdown('<div class="glass">', unsafe_allow_html=True)
-st.markdown('<div class="section-title">Operator Guide</div>', unsafe_allow_html=True)
-with st.expander("New user? Click for a simple dashboard walkthrough", expanded=False):
-    st.markdown(
-        """
-        1. Pick a city in the left sidebar.
-        2. Adjust sliders to simulate traffic, weather inversion, industry load, and weather impact.
-        3. Watch the city status cards update in real time.
-        4. On the map: cyan dots show where each corridor is, while colored 3D columns show how serious the risk is.
-        5. Hover a column to see PM2.5, NO2, and risk details.
-        6. Use the AI tabs to get executive summary, response plan, and public health message.
-        """
-    )
+        st.markdown('<div class="glass">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">Operator Guide</div>', unsafe_allow_html=True)
+        with st.expander("New user? Click for a simple dashboard walkthrough", expanded=False):
+            st.markdown(
+                """
+                1. Pick a city in the left sidebar.
+                2. Adjust sliders to simulate traffic, weather inversion, industry load, and weather impact.
+                3. Watch the city status cards update in real time.
+                4. On the map: cyan dots show where each corridor is, while colored 3D columns show how serious the risk is.
+                5. Hover a column to see PM2.5, NO2, and risk details.
+                6. Use the AI tabs to get executive summary, response plan, and public health message.
+                """
+            )
 
-st.info(
-    f"Now monitoring: {selected_city}. This screen shows simulated operational air-risk indicators by corridor, not live regulatory readings yet."
-)
-st.markdown('</div>', unsafe_allow_html=True)
+        st.info(
+            f"Now monitoring: {controls.selected_city}. This screen shows simulated operational air-risk indicators by corridor, not live regulatory readings yet."
+        )
+        st.markdown('</div>', unsafe_allow_html=True)
 
-st.markdown(
-    f"""
-    <div class="metric-grid">
-            <div class="metric-card"><div class="metric-label">Citywide Status</div><div class="metric-value">{status}</div><div class="metric-delta">Average risk {avg_risk} in {selected_city}</div></div>
-      <div class="metric-card"><div class="metric-label">Critical Hotspots</div><div class="metric-value">{hotspots}</div><div class="metric-delta">Corridors at severe threshold</div></div>
-      <div class="metric-card"><div class="metric-label">Peak Corridor Risk</div><div class="metric-value">{max_risk}</div><div class="metric-delta">{worst}</div></div>
-      <div class="metric-card"><div class="metric-label">Primary Drivers</div><div class="metric-value">{traffic_volume}/{inversion_strength}/{industrial_activity}</div><div class="metric-delta">Traffic / inversion / industry</div></div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+        st.markdown(
+            f"""
+            <div class="metric-grid">
+                <div class="metric-card"><div class="metric-label">Citywide Status</div><div class="metric-value">{status}</div><div class="metric-delta">Average risk {avg_risk} in {controls.selected_city}</div></div>
+                <div class="metric-card"><div class="metric-label">Critical Hotspots</div><div class="metric-value">{hotspots}</div><div class="metric-delta">Corridors at severe threshold</div></div>
+                <div class="metric-card"><div class="metric-label">Peak Corridor Risk</div><div class="metric-value">{max_risk}</div><div class="metric-delta">{worst}</div></div>
+                <div class="metric-card"><div class="metric-label">Primary Drivers</div><div class="metric-value">{controls.traffic_volume}/{controls.inversion_strength}/{controls.industrial_activity}</div><div class="metric-delta">Traffic / inversion / industry</div></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-col1, col2 = st.columns([1.35, 1])
+        city_center = city_config["center"]
+        col1, col2 = st.columns([1.35, 1])
+        with col1:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">Spatial Intelligence</div>', unsafe_allow_html=True)
+            st.subheader("3D Corridor Risk Map")
+            deck = pdk.Deck(
+                map_style="dark",
+                initial_view_state=pdk.ViewState(
+                    latitude=city_center["lat"],
+                    longitude=city_center["lon"],
+                    zoom=city_center["zoom"],
+                    pitch=48,
+                    bearing=24,
+                ),
+                layers=[
+                    pdk.Layer(
+                        "ColumnLayer",
+                        data=df,
+                        get_position='[lon, lat]',
+                        get_elevation="elevation",
+                        elevation_scale=8,
+                        radius="radius",
+                        get_fill_color="color_rgba",
+                        pickable=True,
+                        auto_highlight=True,
+                    ),
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=df,
+                        get_position='[lon, lat]',
+                        get_radius=900,
+                        get_fill_color=[67, 200, 230, 36],
+                        pickable=False,
+                    ),
+                    pdk.Layer(
+                        "ScatterplotLayer",
+                        data=df,
+                        get_position='[lon, lat]',
+                        get_radius=320,
+                        radius_min_pixels=6,
+                        stroked=True,
+                        filled=True,
+                        get_fill_color=[142, 216, 234, 230],
+                        get_line_color=[232, 244, 255, 255],
+                        line_width_min_pixels=2,
+                        pickable=True,
+                    ),
+                ],
+                tooltip={
+                    "html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>Level: {risk_level}<br/>PM2.5: {pm25_est}<br/>NO2: {no2_est}",
+                    "style": {
+                        "backgroundColor": "#0e1a2b",
+                        "color": "#eef6ff",
+                        "border": "1px solid #43c8e6",
+                        "borderRadius": "10px",
+                        "fontSize": "13px",
+                        "padding": "10px",
+                    },
+                },
+            )
+            st.pydeck_chart(deck, use_container_width=True)
+            st.caption(
+                "Map legend: Dot = corridor location. Column height = risk intensity. Column color = risk band (green low, cyan elevated, amber high, red severe)."
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
 
-with col1:
-    st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Spatial Intelligence</div>', unsafe_allow_html=True)
-    st.subheader("3D Corridor Risk Map")
-    deck = pdk.Deck(
-        map_style="dark",
-        initial_view_state=pdk.ViewState(
-            latitude=city_center["lat"],
-            longitude=city_center["lon"],
-            zoom=city_center["zoom"],
-            pitch=48,
-            bearing=24,
-        ),
-        layers=[
-            pdk.Layer(
-                "ColumnLayer",
-                data=df,
-                get_position='[lon, lat]',
-                get_elevation="elevation",
-                elevation_scale=8,
-                radius="radius",
-                get_fill_color="color_rgba",
-                pickable=True,
-                auto_highlight=True,
-            ),
-            pdk.Layer(
-                "ScatterplotLayer",
-                data=df,
-                get_position='[lon, lat]',
-                get_radius=900,
-                get_fill_color=[67, 200, 230, 36],
-                pickable=False,
-            ),
-            pdk.Layer(
-                "ScatterplotLayer",
-                data=df,
-                get_position='[lon, lat]',
-                get_radius=320,
-                radius_min_pixels=6,
-                stroked=True,
-                filled=True,
-                get_fill_color=[142, 216, 234, 230],
-                get_line_color=[232, 244, 255, 255],
-                line_width_min_pixels=2,
-                pickable=True,
-            ),
-        ],
-        tooltip={
-            "html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>Level: {risk_level}<br/>PM2.5: {pm25_est}<br/>NO2: {no2_est}",
-            "style": {
-                "backgroundColor": "#0e1a2b",
-                "color": "#eef6ff",
-                "border": "1px solid #43c8e6",
-                "borderRadius": "10px",
-                "fontSize": "13px",
-                "padding": "10px",
+        with col2:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.markdown('<div class="section-title">Threat Analytics</div>', unsafe_allow_html=True)
+            st.subheader("Corridor Threat Matrix")
+            styled = df[["corridor", "risk_score", "risk_level", "pm25_est", "no2_est", "exposure_index"]].rename(
+                columns={
+                    "corridor": "Corridor",
+                    "risk_score": "Risk",
+                    "risk_level": "Level",
+                    "pm25_est": "PM2.5",
+                    "no2_est": "NO2",
+                    "exposure_index": "Exposure",
+                }
+            )
+            st.dataframe(styled, use_container_width=True, hide_index=True)
+            st.markdown(
+                f"""
+                **What these numbers mean (simple):**
+                - **Risk**: overall stress score from 0 to 100 (higher means worse).
+                - **PM2.5 / NO2**: estimated pollution concentration indicators.
+                - **Exposure**: combined impact estimate that also considers nearby population pressure.
+                - **Top concern now**: **{worst}** with risk **{max_risk}**.
+                """
+            )
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        summary_payload = {
+            "city": controls.selected_city,
+            "citywide_status": status,
+            "avg_risk": avg_risk,
+            "max_risk": max_risk,
+            "top_corridors": df["corridor"].head(3).tolist(),
+            "top_risks": df["risk_score"].head(3).tolist(),
+            "drivers": {
+                "traffic_volume": controls.traffic_volume,
+                "weather_inversion": controls.inversion_strength,
+                "industrial_activity": controls.industrial_activity,
+                "wind_speed": controls.wind_speed,
+                "humidity": controls.humidity,
+                "special_event": controls.emergency_event,
             },
-        },
-    )
-    st.pydeck_chart(deck, use_container_width=True)
-    st.caption(
-        "Map legend: Dot = corridor location. Column height = risk intensity. Column color = risk band (green low, cyan elevated, amber high, red severe)."
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-with col2:
-    st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Threat Analytics</div>', unsafe_allow_html=True)
-    st.subheader("Corridor Threat Matrix")
-    styled = df[["corridor", "risk_score", "risk_level", "pm25_est", "no2_est", "exposure_index"]].rename(
-        columns={
-            "corridor": "Corridor",
-            "risk_score": "Risk",
-            "risk_level": "Level",
-            "pm25_est": "PM2.5",
-            "no2_est": "NO2",
-            "exposure_index": "Exposure",
         }
-    )
-    st.dataframe(styled, use_container_width=True, hide_index=True)
-    st.markdown(
-        f"""
-        **What these numbers mean (simple):**  
-        - **Risk**: overall stress score from 0 to 100 (higher means worse).  
-        - **PM2.5 / NO2**: estimated pollution concentration indicators.  
-        - **Exposure**: combined impact estimate that also considers nearby population pressure.  
-        - **Top concern now**: **{worst}** with risk **{max_risk}**.
-        """
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
 
-summary_payload = {
-    "city": selected_city,
-    "citywide_status": status,
-    "avg_risk": avg_risk,
-    "max_risk": max_risk,
-    "top_corridors": df["corridor"].head(3).tolist(),
-    "top_risks": df["risk_score"].head(3).tolist(),
-    "drivers": {
-        "traffic_volume": traffic_volume,
-        "weather_inversion": inversion_strength,
-        "industrial_activity": industrial_activity,
-        "wind_speed": wind_speed,
-        "humidity": humidity,
-        "special_event": emergency_event,
-    },
-}
+        coo = GeminiCOO()
+        intel = coo.generate(summary_payload)
+        tab1, tab2, tab3 = st.tabs(["Executive Briefing", "Tactical Response Plan", "Public Health Advisory"])
 
-coo = GeminiCOO()
-intel = coo.generate(summary_payload)
+        with tab1:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.write(intel["executive_briefing"])
+            st.markdown('</div>', unsafe_allow_html=True)
+        with tab2:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.write(intel["tactical_response_plan"])
+            st.markdown('</div>', unsafe_allow_html=True)
+        with tab3:
+            st.markdown('<div class="glass">', unsafe_allow_html=True)
+            st.write(intel["public_health_advisory"])
+            st.markdown('</div>', unsafe_allow_html=True)
 
-tab1, tab2, tab3 = st.tabs(["Executive Briefing", "Tactical Response Plan", "Public Health Advisory"])
+        st.markdown(
+            """
+            <div class="footer-note" style="margin-top:14px;">
+              Simulation only. Corridor values are synthetic and designed for command-center prototyping, not regulatory reporting.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-with tab1:
-    st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.write(intel["executive_briefing"])
-    st.markdown('</div>', unsafe_allow_html=True)
+    def run(self) -> None:
+        self.render_hero()
+        controls = self.render_sidebar()
+        city_config = CITY_PRESETS[controls.selected_city]
 
-with tab2:
-    st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.write(intel["tactical_response_plan"])
-    st.markdown('</div>', unsafe_allow_html=True)
+        if controls.page == "Scenario Simulation":
+            scenario_input_token = (
+                f"{controls.traffic_volume}|{controls.inversion_strength}|{controls.industrial_activity}|"
+                f"{controls.wind_speed}|{controls.humidity}|{int(controls.emergency_event)}"
+            )
+            render_scenario_page(city_config, controls.selected_city, scenario_input_token)
+            return
 
-with tab3:
-    st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.write(intel["public_health_advisory"])
-    st.markdown('</div>', unsafe_allow_html=True)
+        self.render_dashboard(controls, city_config)
 
-st.markdown(
-    """
-    <div class="footer-note" style="margin-top:14px;">
-      Simulation only. Corridor values are synthetic and designed for command-center prototyping, not regulatory reporting.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+
+TAQOISApp().run()
