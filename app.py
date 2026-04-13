@@ -1,4 +1,4 @@
-import os
+﻿import os
 import random
 from dataclasses import dataclass
 from typing import Dict, List
@@ -19,7 +19,7 @@ load_dotenv(override=False)
 
 st.set_page_config(
     page_title="TAQOIS Command & Control",
-    page_icon="🌆",
+    page_icon="ðŸŒ†",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -437,7 +437,7 @@ CITY_PRESETS = {
 SCENARIOS = {
     "Normal Operations": {
         "description": "Baseline conditions. Air quality is within safe range across all corridors.",
-        "icon": "🟢",
+        "icon": "ðŸŸ¢",
         "traffic_volume": 45,
         "inversion_strength": 20,
         "industrial_activity": 35,
@@ -448,7 +448,7 @@ SCENARIOS = {
     },
     "Wildfire / Smoke Event": {
         "description": "Regional wildfire drives a PM2.5 surge across downwind corridors.",
-        "icon": "🔥",
+        "icon": "ðŸ”¥",
         "traffic_volume": 55,
         "inversion_strength": 82,
         "industrial_activity": 40,
@@ -458,8 +458,8 @@ SCENARIOS = {
         "iot_overrides": {"PM2.5 Spike": "+340%", "Visibility": "Low", "AQI": "Hazardous"},
     },
     "Severe Temperature Inversion": {
-        "description": "Warm air traps ground-level pollutants — emissions cannot disperse.",
-        "icon": "🌫️",
+        "description": "Warm air traps ground-level pollutants â€” emissions cannot disperse.",
+        "icon": "ðŸŒ«ï¸",
         "traffic_volume": 70,
         "inversion_strength": 95,
         "industrial_activity": 65,
@@ -469,8 +469,8 @@ SCENARIOS = {
         "iot_overrides": {"NO2": "+180%", "CO": "Elevated", "AQI": "Very Unhealthy"},
     },
     "Industrial Incident": {
-        "description": "Unplanned emissions release from industrial zone — localized severe impact.",
-        "icon": "🏭",
+        "description": "Unplanned emissions release from industrial zone â€” localized severe impact.",
+        "icon": "ðŸ­",
         "traffic_volume": 60,
         "inversion_strength": 58,
         "industrial_activity": 98,
@@ -481,14 +481,14 @@ SCENARIOS = {
     },
     "Rush Hour + Heatwave": {
         "description": "Peak traffic combined with extreme heat intensifies ground-level ozone.",
-        "icon": "🌡️",
+        "icon": "ðŸŒ¡ï¸",
         "traffic_volume": 95,
         "inversion_strength": 75,
         "industrial_activity": 60,
         "wind_speed": 6,
         "humidity": 78,
         "emergency_event": False,
-        "iot_overrides": {"Ozone": "+160%", "Temperature": "38°C", "AQI": "Unhealthy"},
+        "iot_overrides": {"Ozone": "+160%", "Temperature": "38Â°C", "AQI": "Unhealthy"},
     },
 }
 
@@ -663,23 +663,57 @@ def city_status(avg_risk: float) -> str:
     return "LOW"
 
 
-def render_scenario_page(city_config: dict, selected_city: str) -> None:
-    """Dedicated scenario simulation page with IoT feed, alert engine, and AI response."""
-    status_colors = {"LOW": "#66d0a2", "ELEVATED": "#43c8e6", "HIGH": "#f2bd6d", "SEVERE": "#df7c8d"}
+def render_scenario_page(city_config: dict, selected_city: str) -> None:  # noqa: C901
+    """Animated movie-mode scenario simulation: growing chart, spike detection, live advisories."""
+    import plotly.graph_objects as go
+    import time as _time
 
+    TOTAL_FRAMES = 48
+    ANIM_PHASES = [
+        # (start, end, label, bar_color, peak_intensity)
+        (0,  9,  "Normal Conditions", "#57ff9a", 0.00),
+        (10, 19, "Event Building",    "#2ef2ff", 0.42),
+        (20, 29, "Peak Intensity",    "#ffc857", 0.92),
+        (30, 39, "Sustained Impact",  "#f2bd6d", 0.74),
+        (40, 48, "Recovery",          "#57ff9a", 0.22),
+    ]
+    STATUS_COLORS = {"LOW": "#66d0a2", "ELEVATED": "#43c8e6", "HIGH": "#f2bd6d", "SEVERE": "#df7c8d"}
+
+    def _get_phase(f):
+        for s, e, lbl, col, itx in ANIM_PHASES:
+            if s <= f <= e:
+                return lbl, col, itx, (f - s) / max(e - s, 1)
+        return "Recovery", "#57ff9a", 0.22, 1.0
+
+    def _lerp(a, b, t):
+        return a + (b - a) * t
+
+    def _frame_run(sc, intensity, corridors):
+        inp = SimulationInputs(
+            traffic_volume=round(_lerp(45, sc["traffic_volume"], intensity)),
+            inversion_strength=round(_lerp(20, sc["inversion_strength"], intensity)),
+            industrial_activity=round(_lerp(35, sc["industrial_activity"], intensity)),
+            wind_speed=round(_lerp(28, sc["wind_speed"], intensity)),
+            humidity=round(_lerp(48, sc["humidity"], intensity)),
+            emergency_event=(intensity >= 0.65 and sc["emergency_event"]),
+        )
+        df = SimulationEngine(corridors).run(inp)
+        return df, round(df["risk_score"].mean(), 1), round(df["pm25_est"].max(), 1), round(df["no2_est"].mean(), 1), inp
+
+    # â”€â”€ Hero banner â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     st.markdown(
         """
         <div class="hero">
           <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
             <div>
-              <div style="font-size:0.85rem; color:#8bb8c8; letter-spacing:0.12em; text-transform:uppercase;">Event Scenario Simulator</div>
-              <h1 class="hero-title" style="margin:0.2rem 0 0.35rem 0;">Live Event Detection &amp; Response</h1>
-              <div class="hero-subtitle">Simulate sudden air-quality disruptions — wildfire, industrial incident, heatwave — and watch the system detect changes, trigger alerts, and generate actionable advisories in real time.</div>
+              <div style="font-size:0.85rem; color:#8bb8c8; letter-spacing:0.12em; text-transform:uppercase;">Live Event Simulation</div>
+              <h1 class="hero-title" style="margin:0.2rem 0 0.35rem 0;">Air Quality Cinema â€” Watch It Unfold</h1>
+              <div class="hero-subtitle">Press <b>â–¶ Auto Run</b> to start. The chart builds frame-by-frame as the event escalates: PM2.5 spikes, risk crosses thresholds, advisory markers appear, and the AI generates a live briefing â€” all without touching a slider.</div>
             </div>
             <div>
-              <span class="alert-chip" style="background:rgba(67,200,230,0.12); color:#8ed8ea;">IoT Sensor Feed</span>
-              <span class="alert-chip" style="background:rgba(242,189,109,0.12); color:#f2bd6d;">Event Detection</span>
-              <span class="alert-chip" style="background:rgba(223,124,141,0.12); color:#df7c8d;">Alert Engine</span>
+              <span class="alert-chip" style="background:rgba(87,255,154,0.10); color:#57ff9a;">Growing Chart</span>
+              <span class="alert-chip" style="background:rgba(255,200,87,0.12); color:#ffc857;">Spike Detection</span>
+              <span class="alert-chip" style="background:rgba(223,124,141,0.12); color:#df7c8d;">Auto Advisory</span>
             </div>
           </div>
         </div>
@@ -687,9 +721,9 @@ def render_scenario_page(city_config: dict, selected_city: str) -> None:
         unsafe_allow_html=True,
     )
 
-    # Scenario selector
+    # â”€â”€ Scenario selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     st.markdown('<div class="glass">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">Choose Event Scenario</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Choose Scenario</div>', unsafe_allow_html=True)
     selected_scenario = st.radio(
         "scenario_picker",
         list(SCENARIOS.keys()),
@@ -699,97 +733,242 @@ def render_scenario_page(city_config: dict, selected_city: str) -> None:
     scenario = SCENARIOS[selected_scenario]
     st.markdown(
         f"""
-        <div style="margin-top:8px; padding:12px 16px; background:rgba(67,200,230,0.06);
-                    border-radius:12px; border:1px solid rgba(67,200,230,0.16);">
-          <span style="font-size:1.3rem; vertical-align:middle;">{scenario['icon']}</span>
+        <div style="margin-top:8px; padding:10px 16px; background:rgba(67,200,230,0.05);
+                    border-radius:10px; border:1px solid rgba(67,200,230,0.14);">
+          <span style="font-size:1.2rem; vertical-align:middle;">{scenario['icon']}</span>
           <span style="margin-left:10px; font-weight:600; color:#e6f0fa; vertical-align:middle;">{selected_scenario}</span>
-          <span style="margin-left:14px; color:#9bb1c6; font-size:0.88rem;">{scenario['description']}</span>
+          <span style="margin-left:14px; color:#9bb1c6; font-size:0.86rem;">{scenario['description']}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Run baseline vs event simulations
-    engine = SimulationEngine(city_config["corridors"])
-    df_before = engine.run(SimulationInputs(
-        traffic_volume=45, inversion_strength=20, industrial_activity=35,
-        wind_speed=28, humidity=48, emergency_event=False,
-    ))
-    df_after = engine.run(SimulationInputs(
-        traffic_volume=scenario["traffic_volume"],
-        inversion_strength=scenario["inversion_strength"],
-        industrial_activity=scenario["industrial_activity"],
-        wind_speed=scenario["wind_speed"],
-        humidity=scenario["humidity"],
-        emergency_event=scenario["emergency_event"],
-    ))
+    # â”€â”€ Session-state init / reset when city or scenario changes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    state_key = f"{selected_city}|{selected_scenario}"
+    if st.session_state.get("scen_key") != state_key:
+        st.session_state.scen_key       = state_key
+        st.session_state.scen_frame     = 0
+        st.session_state.scen_running   = False
+        st.session_state.scen_history   = []
+        st.session_state.scen_advisories = []
 
-    avg_before = round(df_before["risk_score"].mean(), 1)
-    avg_after = round(df_after["risk_score"].mean(), 1)
-    status_before = city_status(avg_before)
-    status_after = city_status(avg_after)
-    worst_after = df_after.iloc[0]["corridor"]
-    max_after = round(df_after["risk_score"].max(), 1)
-    after_color = status_colors.get(status_after, "#e6f0fa")
+    frame   = st.session_state.scen_frame
+    running = st.session_state.scen_running
 
-    # Before / After comparison
-    col_b, col_arrow, col_a = st.columns([1, 0.1, 1])
-    with col_b:
+    # â”€â”€ Playback controls â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    st.markdown('<div class="glass" style="padding:12px 16px;">', unsafe_allow_html=True)
+    ctrl_c1, ctrl_c2, ctrl_c3, ctrl_c4 = st.columns([1.3, 1, 2.5, 1.2])
+    with ctrl_c1:
+        btn_lbl = "â¸  Pause" if running else "â–¶  Auto Run"
+        btn_type = "secondary" if running else "primary"
+        if st.button(btn_lbl, use_container_width=True, type=btn_type):
+            st.session_state.scen_running = not running
+            st.rerun()
+    with ctrl_c2:
+        if st.button("â®  Reset", use_container_width=True):
+            st.session_state.scen_frame      = 0
+            st.session_state.scen_running    = False
+            st.session_state.scen_history    = []
+            st.session_state.scen_advisories = []
+            st.rerun()
+    with ctrl_c4:
+        speed_opt = st.select_slider(
+            "Animation speed", options=["0.5Ã—", "1Ã—", "2Ã—", "3Ã—"], value="1Ã—",
+            label_visibility="collapsed",
+        )
+    speed_map   = {"0.5Ã—": 0.70, "1Ã—": 0.35, "2Ã—": 0.18, "3Ã—": 0.09}
+    frame_delay = speed_map[speed_opt]
+    st.markdown(
+        f'<div style="color:#7a9ab4; font-size:0.78rem; margin-top:6px;">'
+        f'Frame {frame} / {TOTAL_FRAMES} &nbsp;Â·&nbsp; Speed: {speed_opt}</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('</div>', unsafe_allow_html=True)
+
+    # â”€â”€ Compute current frame â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    phase_lbl, phase_col, phase_itx, _ = _get_phase(frame)
+    df_cur, avg_risk, max_pm25, avg_no2, cur_inp = _frame_run(scenario, phase_itx, city_config["corridors"])
+    status_cur  = city_status(avg_risk)
+    cur_color   = STATUS_COLORS.get(status_cur, "#e6f0fa")
+    time_lbl    = f"T+{frame // 6:02d}:{(frame % 6) * 10:02d}"
+
+    # Append to rolling history (guard duplicate on same frame)
+    hist = st.session_state.scen_history
+    if not hist or hist[-1]["frame"] != frame:
+        hist.append({
+            "frame": frame, "time": time_lbl,
+            "pm25": max_pm25, "risk": avg_risk, "no2": avg_no2,
+            "phase": phase_lbl, "status": status_cur,
+        })
+
+    # Advisory threshold crossing â€” fire once per level
+    adv = st.session_state.scen_advisories
+    if avg_risk >= 75 and not any(a["level"] == "SEVERE" for a in adv):
+        adv.append({"frame": frame, "time": time_lbl, "level": "SEVERE", "risk": avg_risk})
+    elif 50 <= avg_risk < 75 and not any(a["level"] in ("HIGH", "SEVERE") for a in adv):
+        adv.append({"frame": frame, "time": time_lbl, "level": "HIGH",   "risk": avg_risk})
+
+    # â”€â”€ Phase progress bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    segs = ""
+    for s, e, lbl, col, _ in ANIM_PHASES:
+        pct   = int(((e - s + 1) / (TOTAL_FRAMES + 1)) * 100)
+        alpha = "1" if lbl == phase_lbl else "0.28"
+        segs += (
+            f'<div style="flex:{pct}; background:{col}; height:5px; border-radius:3px;'
+            f' margin:0 1px; opacity:{alpha}; transition:opacity 0.4s;"></div>'
+        )
+    st.markdown(
+        f"""
+        <div style="display:flex; align-items:center; gap:10px; margin:10px 0 0 0;">
+          <div style="flex:1; display:flex; align-items:center; gap:2px; height:5px;">{segs}</div>
+          <div style="white-space:nowrap; font-size:0.79rem; color:#7a9ab4; min-width:80px;">
+            {time_lbl} &nbsp;
+            <span style="color:{phase_col}; font-weight:600;">{phase_lbl}</span>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # â”€â”€ Live-growing Plotly chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    hist_df = pd.DataFrame(hist)
+    fig = go.Figure()
+
+    # Phase background bands (only up to current frame for "reveal" feel)
+    band_fills = {
+        "Normal Conditions": "rgba(87,255,154,0.06)",
+        "Event Building":    "rgba(46,242,255,0.06)",
+        "Peak Intensity":    "rgba(255,200,87,0.09)",
+        "Sustained Impact":  "rgba(242,189,109,0.07)",
+        "Recovery":          "rgba(87,255,154,0.06)",
+    }
+    for s, e, lbl, col, _ in ANIM_PHASES:
+        if s > frame:
+            break
+        fig.add_vrect(
+            x0=s, x1=min(e, frame),
+            fillcolor=band_fills.get(lbl, "rgba(255,255,255,0.04)"),
+            line_width=0,
+            annotation_text=lbl,
+            annotation_position="top left",
+            annotation_font=dict(size=9, color="#5a7a94"),
+        )
+
+    # PM2.5 filled area trace
+    if len(hist_df):
+        fig.add_trace(go.Scatter(
+            x=hist_df["frame"], y=hist_df["pm25"],
+            name="PM2.5 Âµg/mÂ³", mode="lines",
+            line=dict(color="#ffc857", width=2.5),
+            fill="tozeroy", fillcolor="rgba(255,200,87,0.13)",
+            hovertemplate="<b>%{customdata}</b><br>PM2.5: %{y:.1f} Âµg/mÂ³<extra></extra>",
+            customdata=hist_df["time"],
+        ))
+        # Risk score (secondary y-axis)
+        fig.add_trace(go.Scatter(
+            x=hist_df["frame"], y=hist_df["risk"],
+            name="Risk Score", mode="lines",
+            line=dict(color="#43c8e6", width=2, dash="dot"),
+            yaxis="y2",
+            hovertemplate="<b>%{customdata}</b><br>Risk: %{y:.1f}<extra></extra>",
+            customdata=hist_df["time"],
+        ))
+        # Live cursor dot â€” shows current position
+        fig.add_trace(go.Scatter(
+            x=[frame], y=[max_pm25],
+            mode="markers", showlegend=False,
+            marker=dict(color="#ffc857", size=10, symbol="circle",
+                        line=dict(color="#fff", width=2)),
+            hoverinfo="skip",
+        ))
+
+    # Advisory markers â€” vertical line + star annotation
+    for a in adv:
+        mc = "#df7c8d" if a["level"] == "SEVERE" else "#f2bd6d"
+        fig.add_vline(x=a["frame"], line_color=mc, line_dash="dash",
+                      line_width=1.6, opacity=0.75)
+        fig.add_annotation(
+            x=a["frame"], y=1.0, yref="paper",
+            text=f"âš  {a['level']} Advisory",
+            showarrow=False,
+            font=dict(size=10, color=mc),
+            bgcolor="rgba(14,26,43,0.88)", bordercolor=mc,
+            borderwidth=1, borderpad=4, yshift=10,
+        )
+
+    # WHO / threshold lines on primary axis
+    fig.add_hline(y=25,  line_dash="dot", line_color="rgba(87,255,154,0.4)",
+                  annotation_text="WHO annual limit (25 Âµg/mÂ³)",
+                  annotation_font=dict(size=9, color="#57ff9a"),
+                  annotation_position="top right")
+    fig.add_hline(y=55,  line_dash="dot", line_color="rgba(223,124,141,0.4)",
+                  annotation_text="Hazardous (55 Âµg/mÂ³)",
+                  annotation_font=dict(size=9, color="#df7c8d"),
+                  annotation_position="top right")
+
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(10,18,30,0.72)",
+        font=dict(family="Space Grotesk, sans-serif", color="#c8d9eb"),
+        height=310,
+        margin=dict(l=0, r=0, t=24, b=28),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02,
+                    xanchor="right", x=1, bgcolor="rgba(0,0,0,0)"),
+        xaxis=dict(title="Simulation Frame", range=[0, TOTAL_FRAMES],
+                   gridcolor="rgba(67,200,230,0.08)", showline=False,
+                   tickfont=dict(size=10)),
+        yaxis=dict(title="PM2.5 Âµg/mÂ³", gridcolor="rgba(67,200,230,0.08)",
+                   showline=False, tickfont=dict(size=10), rangemode="tozero"),
+        yaxis2=dict(title="Risk Score (0â€“100)", overlaying="y", side="right",
+                    range=[0, 100], showgrid=False, showline=False,
+                    tickfont=dict(size=10)),
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    # â”€â”€ Live metric cards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    def _card(label, val, color, sub=""):
+        return (
+            f'<div class="glass" style="text-align:center; padding:14px 6px;">'
+            f'  <div class="metric-label">{label}</div>'
+            f'  <div class="metric-value" style="color:{color}; font-size:1.55rem;">{val}</div>'
+            f'  <div class="metric-delta" style="font-size:0.78rem;">{sub}</div>'
+            f'</div>'
+        )
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    with mc1:
+        pm_col = "#df7c8d" if max_pm25 > 55 else ("#ffc857" if max_pm25 > 25 else "#66d0a2")
+        pm_lbl = "Hazardous" if max_pm25 > 55 else ("Elevated" if max_pm25 > 25 else "Good")
+        st.markdown(_card("Peak PM2.5 (Âµg/mÂ³)", max_pm25, pm_col, pm_lbl), unsafe_allow_html=True)
+    with mc2:
+        st.markdown(_card("Avg Risk Score", avg_risk, cur_color, status_cur), unsafe_allow_html=True)
+    with mc3:
+        no2_col = "#f2bd6d" if avg_no2 > 40 else "#43c8e6"
+        st.markdown(_card("Avg NOâ‚‚ (Âµg/mÂ³)", avg_no2, no2_col, "â€”"), unsafe_allow_html=True)
+    with mc4:
+        adv_cnt   = len(adv)
+        adv_col   = "#df7c8d" if adv_cnt else "#66d0a2"
+        adv_sub   = adv[-1]["level"] + " fired" if adv else "No alerts yet"
+        st.markdown(_card("Advisories", adv_cnt, adv_col, adv_sub), unsafe_allow_html=True)
+
+    # Alert banner (appears the moment advisory fires)
+    if adv:
+        latest  = adv[-1]
+        ac      = "#df7c8d" if latest["level"] == "SEVERE" else "#f2bd6d"
+        abg     = "rgba(223,124,141,0.10)" if latest["level"] == "SEVERE" else "rgba(242,189,109,0.08)"
         st.markdown(
             f"""
-            <div class="glass">
-              <div class="section-title">Before Event</div>
-              <div style="margin-top:8px;">
-                <div class="metric-label">Citywide Status</div>
-                <div class="metric-value" style="color:#66d0a2;">{status_before}</div>
-                <div class="metric-delta">Avg Risk: {avg_before} / 100</div>
-              </div>
-              <div style="margin-top:10px; color:#9bb1c6; font-size:0.88rem;">Normal operations. All sensors within baseline range.</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-    with col_arrow:
-        st.markdown(
-            "<div style='display:flex;align-items:center;justify-content:center;height:100%;"
-            "padding-top:52px;font-size:2rem;color:#43c8e6;'>→</div>",
-            unsafe_allow_html=True,
-        )
-    with col_a:
-        delta = round(avg_after - avg_before, 1)
-        st.markdown(
-            f"""
-            <div class="glass">
-              <div class="section-title">After Event Detected</div>
-              <div style="margin-top:8px;">
-                <div class="metric-label">Citywide Status</div>
-                <div class="metric-value" style="color:{after_color};">{status_after}</div>
-                <div class="metric-delta">Avg Risk: {avg_after} / 100 &nbsp;(+{delta})</div>
-              </div>
-              <div style="margin-top:10px; color:#9bb1c6; font-size:0.88rem;">{scenario['description']}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # Alert banner
-    if status_after in ("HIGH", "SEVERE"):
-        alert_color = "#df7c8d" if status_after == "SEVERE" else "#f2bd6d"
-        alert_bg = "rgba(223,124,141,0.11)" if status_after == "SEVERE" else "rgba(242,189,109,0.09)"
-        icon_sym = "🚨" if status_after == "SEVERE" else "⚠️"
-        st.markdown(
-            f"""
-            <div style="background:{alert_bg}; border:1px solid {alert_color}; border-radius:14px;
-                        padding:14px 18px; margin-top:14px; display:flex; align-items:center; gap:14px;">
-              <span style="font-size:1.5rem;">{icon_sym}</span>
+            <div style="background:{abg}; border:1px solid {ac}; border-radius:14px;
+                        padding:12px 18px; margin-top:10px; display:flex; align-items:center; gap:14px;">
+              <span style="font-size:1.4rem;">ðŸš¨</span>
               <div>
-                <div style="font-weight:700; color:{alert_color}; font-size:0.96rem;">
-                  SYSTEM ALERT — {status_after} AIR QUALITY EVENT DETECTED IN {selected_city.upper()}
+                <div style="font-weight:700; color:{ac}; font-size:0.95rem;">
+                  {latest['level']} ADVISORY TRIGGERED  @  {latest['time']}  â€”  Risk: {latest['risk']}
                 </div>
-                <div style="color:#c8d9eb; font-size:0.87rem; margin-top:3px;">
-                  Triggered by <b>{selected_scenario}</b>. Avg risk {avg_before} → {avg_after}.
-                  Worst corridor: <b>{worst_after}</b> (risk {max_after}).
+                <div style="color:#c8d9eb; font-size:0.85rem; margin-top:2px;">
+                  Event: <b>{selected_scenario}</b> Â· City: <b>{selected_city}</b> Â·
+                  AI advisory briefing available below.
                 </div>
               </div>
             </div>
@@ -797,148 +976,111 @@ def render_scenario_page(city_config: dict, selected_city: str) -> None:
             unsafe_allow_html=True,
         )
 
+    # â”€â”€ IoT feed + live map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     st.markdown("<div style='margin-top:16px;'></div>", unsafe_allow_html=True)
-
-    # IoT feed + event map
     col_iot, col_map = st.columns([1, 1.4])
     iot_overrides = scenario.get("iot_overrides", {})
+    worst_row     = df_cur.iloc[0]
 
     with col_iot:
         st.markdown('<div class="glass">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">IoT Sensor Feed</div>', unsafe_allow_html=True)
-        st.caption(f"Simulated live readings — {worst_after}")
-        worst_row = df_after.iloc[0]
-        n = lambda v, p=0.06: round(v * (1 + random.uniform(-p, p)), 1)
-        if iot_overrides:
-            for k, v in iot_overrides.items():
-                fc = "#df7c8d" if any(w in str(v).upper() for w in ["CRITICAL", "HAZARDOUS"]) else "#f2bd6d"
-                st.markdown(
-                    f'<span style="color:{fc}; font-weight:600;">⬆ {k}:</span>'
-                    f' <span style="color:#e6f0fa;">{v}</span>',
-                    unsafe_allow_html=True,
-                )
+        st.markdown(
+            f'<div class="section-title">IoT Sensor Feed '
+            f'<span style="color:#7a9ab4; font-size:0.78rem;">{time_lbl}</span></div>',
+            unsafe_allow_html=True,
+        )
+        n = lambda v, p=0.05: round(v * (1 + random.uniform(-p, p)), 1)
         sensor_df = pd.DataFrame({
-            "Sensor": ["PM2.5 (µg/m³)", "NO₂ (µg/m³)", "CO (ppm)", "O₃ (ppb)", "Temp (°C)", "Humidity (%)", "Wind (km/h)"],
-            "Live Reading": [
+            "Sensor": ["PM2.5 (Âµg/mÂ³)", "NOâ‚‚ (Âµg/mÂ³)", "CO (ppm)", "Oâ‚ƒ (ppb)",
+                       "Temp (Â°C)", "Humidity (%)", "Wind (km/h)"],
+            "Reading": [
                 n(worst_row["pm25_est"]),
                 n(worst_row["no2_est"]),
-                round(0.6 + random.uniform(0, 0.8), 2),
-                round(42 + random.uniform(-8, 22), 1),
-                round(18 + random.uniform(-2, 6), 1),
-                scenario["humidity"] + random.randint(-3, 3),
-                max(0, scenario["wind_speed"] + random.randint(-2, 2)),
+                round(0.4 + phase_itx * 0.9 + random.uniform(0, 0.3), 2),
+                round(38 + phase_itx * 28 + random.uniform(-5, 5), 1),
+                round(18 + phase_itx * 6 + random.uniform(-1, 2), 1),
+                round(_lerp(48, scenario["humidity"], phase_itx) + random.randint(-2, 2)),
+                round(max(0.0, _lerp(28, scenario["wind_speed"], phase_itx) + random.randint(-2, 2))),
             ],
-            "Status": ["—"] * 7,
         })
-        r = sensor_df["Live Reading"]
-        sensor_df.loc[0, "Status"] = "Critical" if r[0] > 55 else ("Caution" if r[0] > 12 else "OK")
-        sensor_df.loc[1, "Status"] = "Critical" if r[1] > 100 else ("Caution" if r[1] > 40 else "OK")
-        sensor_df.loc[2, "Status"] = "Critical" if r[2] > 1.0 else "OK"
-        sensor_df.loc[3, "Status"] = "Caution" if r[3] > 50 else "OK"
-        sensor_df.loc[4, "Status"] = "Caution" if r[4] > 30 else "OK"
-        sensor_df.loc[5, "Status"] = "Caution" if r[5] > 75 else "OK"
-        sensor_df.loc[6, "Status"] = "Caution" if r[6] < 10 else "OK"
         st.dataframe(sensor_df, use_container_width=True, hide_index=True)
-        if st.button("↻  Refresh Sensor Readings", use_container_width=True):
-            st.rerun()
+        # IoT override flags visible only once event is underway
+        if iot_overrides and phase_itx >= 0.35:
+            for k, v in iot_overrides.items():
+                fc = "#df7c8d" if any(w in str(v).upper() for w in ["CRITICAL","HAZARDOUS"]) else "#ffc857"
+                st.markdown(
+                    f'<span style="color:{fc}; font-size:0.84rem; font-weight:600;">â¬† {k}: {v}</span>',
+                    unsafe_allow_html=True,
+                )
         st.markdown(
-            "<div style='color:#7a9ab4; font-size:0.78rem; margin-top:8px;'>"
-            "In production these readings come directly from IoT sensors and air-quality station APIs.</div>",
+            "<div style='color:#7a9ab4; font-size:0.76rem; margin-top:8px;'>"
+            "Readings update each animation frame. In production: live sensor APIs.</div>",
             unsafe_allow_html=True,
         )
         st.markdown('</div>', unsafe_allow_html=True)
 
     with col_map:
         st.markdown('<div class="glass">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Event Impact Map</div>', unsafe_allow_html=True)
-        event_deck = pdk.Deck(
+        st.markdown('<div class="section-title">Live Impact Map</div>', unsafe_allow_html=True)
+        live_deck = pdk.Deck(
             map_style="dark",
             initial_view_state=pdk.ViewState(
                 latitude=city_config["center"]["lat"],
                 longitude=city_config["center"]["lon"],
                 zoom=city_config["center"]["zoom"],
-                pitch=48,
-                bearing=24,
+                pitch=48, bearing=24,
             ),
             layers=[
-                pdk.Layer("ColumnLayer", data=df_after, get_position="[lon, lat]",
+                pdk.Layer("ColumnLayer", data=df_cur, get_position="[lon, lat]",
                           get_elevation="elevation", elevation_scale=8, radius="radius",
                           get_fill_color="color_rgba", pickable=True, auto_highlight=True),
-                pdk.Layer("ScatterplotLayer", data=df_after, get_position="[lon, lat]",
+                pdk.Layer("ScatterplotLayer", data=df_cur, get_position="[lon, lat]",
                           get_radius=900, get_fill_color=[67, 200, 230, 36], pickable=False),
-                pdk.Layer("ScatterplotLayer", data=df_after, get_position="[lon, lat]",
+                pdk.Layer("ScatterplotLayer", data=df_cur, get_position="[lon, lat]",
                           get_radius=320, radius_min_pixels=6, stroked=True, filled=True,
                           get_fill_color=[142, 216, 234, 230], get_line_color=[232, 244, 255, 255],
                           line_width_min_pixels=2, pickable=True),
             ],
             tooltip={
-                "html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>Level: {risk_level}<br/>PM2.5: {pm25_est}<br/>NO₂: {no2_est}",
+                "html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>PM2.5: {pm25_est}",
                 "style": {"backgroundColor": "#0e1a2b", "color": "#eef6ff",
                            "border": "1px solid #43c8e6", "borderRadius": "10px",
                            "fontSize": "13px", "padding": "10px"},
             },
         )
-        st.pydeck_chart(event_deck, use_container_width=True)
+        st.pydeck_chart(live_deck, use_container_width=True)
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # System response timeline
-    iot_flag = list(iot_overrides.keys())[0] if iot_overrides else "pollutant levels"
-    timeline = [
-        ("T+00:00", "Baseline OK", "#66d0a2", "All corridors within normal range."),
-        ("T+00:02", "Anomaly Detected", "#43c8e6", f"Sensor flag: {iot_flag} exceeded threshold."),
-        ("T+00:04", "Event Classified", "#f2bd6d", f"Event: {selected_scenario}."),
-        ("T+00:06", "Corridors Re-scored", "#f2bd6d", f"New avg risk: {avg_after}. Hotspots: {int((df_after['risk_score'] >= 75).sum())}."),
-        ("T+00:08", "Advisory Generated", after_color, "Gemini COO generates briefing and response plan."),
-        ("T+00:10", "Alert Issued", after_color, f"Public alert published for {selected_city}."),
-    ]
-    st.markdown('<div class="glass" style="margin-top:16px;">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">System Response Timeline</div>', unsafe_allow_html=True)
-    tcols = st.columns(len(timeline))
-    for tcol, (t, label, color, detail) in zip(tcols, timeline):
-        with tcol:
-            st.markdown(
-                f"""
-                <div style="text-align:center; padding:10px 4px;">
-                  <div style="font-size:0.7rem; color:#7a9ab4; margin-bottom:4px;">{t}</div>
-                  <div style="width:22px; height:22px; border-radius:50%; background:{color};
-                              margin:0 auto 6px; box-shadow:0 0 8px {color}55;"></div>
-                  <div style="font-size:0.76rem; font-weight:600; color:{color}; margin-bottom:3px;">{label}</div>
-                  <div style="font-size:0.71rem; color:#7a9ab4; line-height:1.35;">{detail}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-    # AI-generated event response
-    st.markdown('<div class="glass" style="margin-top:16px;">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">AI-Generated Event Response</div>', unsafe_allow_html=True)
-    coo = GeminiCOO()
-    intel = coo.generate({
-        "city": selected_city,
-        "citywide_status": status_after,
-        "avg_risk": avg_after,
-        "max_risk": max_after,
-        "top_corridors": df_after["corridor"].head(3).tolist(),
-        "top_risks": df_after["risk_score"].head(3).tolist(),
-        "event_type": selected_scenario,
-        "drivers": {
-            "traffic_volume": scenario["traffic_volume"],
-            "weather_inversion": scenario["inversion_strength"],
-            "industrial_activity": scenario["industrial_activity"],
-            "wind_speed": scenario["wind_speed"],
-            "humidity": scenario["humidity"],
-            "special_event": scenario["emergency_event"],
-        },
-    })
-    t1, t2, t3 = st.tabs(["Executive Briefing", "Tactical Response Plan", "Public Health Advisory"])
-    with t1:
-        st.write(intel["executive_briefing"])
-    with t2:
-        st.write(intel["tactical_response_plan"])
-    with t3:
-        st.write(intel["public_health_advisory"])
-    st.markdown('</div>', unsafe_allow_html=True)
+    # â”€â”€ AI Advisory (appears once first threshold crossed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if adv:
+        st.markdown('<div class="glass" style="margin-top:16px;">', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">AI-Generated Event Advisory</div>', unsafe_allow_html=True)
+        coo   = GeminiCOO()
+        intel = coo.generate({
+            "city":             selected_city,
+            "citywide_status":  status_cur,
+            "avg_risk":         avg_risk,
+            "max_risk":         round(df_cur["risk_score"].max(), 1),
+            "top_corridors":    df_cur["corridor"].head(3).tolist(),
+            "top_risks":        df_cur["risk_score"].head(3).tolist(),
+            "event_type":       selected_scenario,
+            "drivers": {
+                "traffic_volume":      cur_inp.traffic_volume,
+                "weather_inversion":   cur_inp.inversion_strength,
+                "industrial_activity": cur_inp.industrial_activity,
+                "wind_speed":          cur_inp.wind_speed,
+                "humidity":            cur_inp.humidity,
+                "special_event":       cur_inp.emergency_event,
+            },
+        })
+        at1, at2, at3 = st.tabs(["Executive Briefing", "Tactical Response Plan", "Public Health Advisory"])
+        with at1:
+            st.write(intel["executive_briefing"])
+        with at2:
+            st.write(intel["tactical_response_plan"])
+        with at3:
+            st.write(intel["public_health_advisory"])
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(
         """
@@ -949,6 +1091,15 @@ def render_scenario_page(city_config: dict, selected_city: str) -> None:
         """,
         unsafe_allow_html=True,
     )
+
+    # â”€â”€ Auto-advance engine â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    if running:
+        if frame < TOTAL_FRAMES:
+            _time.sleep(frame_delay)
+            st.session_state.scen_frame += 1
+            st.rerun()
+        else:
+            st.session_state.scen_running = False
 
 
 st.markdown(
@@ -975,7 +1126,7 @@ with st.sidebar:
     st.header("TAQOIS Navigation")
     page = st.radio(
         "page_nav",
-        ["📊  Dashboard", "🚨  Scenario Simulation"],
+        ["ðŸ“Š  Dashboard", "ðŸš¨  Scenario Simulation"],
         label_visibility="collapsed",
     )
     st.markdown("---")
@@ -998,7 +1149,7 @@ city_config = CITY_PRESETS[selected_city]
 corridors = city_config["corridors"]
 city_center = city_config["center"]
 
-if page == "🚨  Scenario Simulation":
+if page == "ðŸš¨  Scenario Simulation":
     render_scenario_page(city_config, selected_city)
     st.stop()
 
@@ -1101,7 +1252,7 @@ with col1:
             ),
         ],
         tooltip={
-            "html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>Level: {risk_level}<br/>PM2.5: {pm25_est}<br/>NO₂: {no2_est}",
+            "html": "<b>{corridor}</b><br/>Risk: {risk_score}<br/>Level: {risk_level}<br/>PM2.5: {pm25_est}<br/>NOâ‚‚: {no2_est}",
             "style": {
                 "backgroundColor": "#0e1a2b",
                 "color": "#eef6ff",
@@ -1128,7 +1279,7 @@ with col2:
             "risk_score": "Risk",
             "risk_level": "Level",
             "pm25_est": "PM2.5",
-            "no2_est": "NO₂",
+            "no2_est": "NOâ‚‚",
             "exposure_index": "Exposure",
         }
     )
