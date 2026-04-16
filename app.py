@@ -1,4 +1,4 @@
-﻿import os
+import os
 import random
 from dataclasses import dataclass, field
 from typing import Dict, List
@@ -7,11 +7,6 @@ import pandas as pd
 import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
-
-try:
-    import google.generativeai as genai
-except Exception:
-    genai = None
 
 
 load_dotenv(override=False)
@@ -566,91 +561,30 @@ class SimulationEngine:
         return "UNKNOWN", "#ffffff"
 
 
-class GeminiCOO:
-    def __init__(self):
-        self.api_key = os.getenv("GEMINI_API_KEY", "")
-        self.enabled = bool(self.api_key) and genai is not None
-        if self.enabled:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel("gemini-2.5-flash")
-
-    def generate(self, summary_payload: Dict) -> Dict[str, str]:
-        if not self.enabled:
-            return self._fallback(summary_payload)
-
-        city = summary_payload.get("city", "the selected city")
-        prompt = f"""
-You are the Chief Operations Officer for {city} Air Quality Operations Intelligence System (TAQOIS).
-Analyze this simulated state and produce:
-1) Executive Briefing
-2) Tactical Response Plan
-3) Public Health Advisory
-
-Constraints:
-- Be precise, concise, executive-ready.
-- Use {city} corridor names exactly as provided.
-- Mention the top 3 highest-risk corridors.
-- Include urgency level and next 2-hour operational posture.
-- Public advisory must be plain-language.
-
-Simulation state:
-{summary_payload}
-"""
-        try:
-            response = self.model.generate_content(prompt)
-            text = response.text.strip()
-            return self._parse_sections(text)
-        except Exception:
-            return self._fallback(summary_payload)
-
-    def _parse_sections(self, text: str) -> Dict[str, str]:
-        sections = {
-            "executive_briefing": "",
-            "tactical_response_plan": "",
-            "public_health_advisory": "",
-        }
-        current = None
-        for line in text.splitlines():
-            line_stripped = line.strip().lower()
-            if "executive" in line_stripped and "brief" in line_stripped:
-                current = "executive_briefing"
-                continue
-            if "tactical" in line_stripped and "response" in line_stripped:
-                current = "tactical_response_plan"
-                continue
-            if "public" in line_stripped and ("advisory" in line_stripped or "health" in line_stripped):
-                current = "public_health_advisory"
-                continue
-            if current:
-                sections[current] += line + "\n"
-        if not any(v.strip() for v in sections.values()):
-            return self._fallback({"raw_text": text})
-        return {k: v.strip() for k, v in sections.items()}
-
-    def _fallback(self, payload: Dict) -> Dict[str, str]:
-        city = payload.get("city", "the selected city")
-        top = payload["top_corridors"]
-        avg = payload["avg_risk"]
-        urgency = payload["citywide_status"]
-        return {
-            "executive_briefing": (
-                f"{city} air-quality simulation indicates a {urgency} citywide posture with an average corridor risk score of {avg}. "
-                f"Highest-risk corridors are {top[0]}, {top[1]}, and {top[2]}. "
-                f"Immediate focus should prioritize traffic flow smoothing, industrial emissions coordination, and targeted public messaging over the next 2 hours."
-            ),
-            "tactical_response_plan": (
-                "1. Activate corridor monitoring escalation for the top three hotspots.\n"
-                "2. Coordinate with transportation control to reduce stop-and-go congestion on affected links.\n"
-                "3. Notify industrial compliance partners in impacted zones to minimize discretionary emissions.\n"
-                "4. Push public health advisories to sensitive populations near severe and high-risk corridors.\n"
-                "5. Re-run simulation every 15 minutes and escalate to municipal emergency coordination if two or more corridors remain in Severe status."
-            ),
-            "public_health_advisory": (
-                f"Air quality is currently under {urgency.lower()} pressure in parts of {city}, especially near {top[0]}, {top[1]}, and {top[2]}. "
-                "Children, older adults, and people with asthma or heart and lung conditions should limit strenuous outdoor activity near major roads and industrial areas today. "
-                "Keep windows closed where possible and use indoor air filtration if available."
-            ),
-        }
+def generate_intel(payload: Dict) -> Dict[str, str]:
+    city = payload.get("city", "the selected city")
+    top = payload["top_corridors"]
+    avg = payload["avg_risk"]
+    urgency = payload["citywide_status"]
+    return {
+        "executive_briefing": (
+            f"{city} air-quality simulation indicates a {urgency} citywide posture with an average corridor risk score of {avg}. "
+            f"Highest-risk corridors are {top[0]}, {top[1]}, and {top[2]}. "
+            f"Immediate focus should prioritize traffic flow smoothing, industrial emissions coordination, and targeted public messaging over the next 2 hours."
+        ),
+        "tactical_response_plan": (
+            "1. Activate corridor monitoring escalation for the top three hotspots.\n"
+            "2. Coordinate with transportation control to reduce stop-and-go congestion on affected links.\n"
+            "3. Notify industrial compliance partners in impacted zones to minimize discretionary emissions.\n"
+            "4. Push public health advisories to sensitive populations near severe and high-risk corridors.\n"
+            "5. Re-run simulation every 15 minutes and escalate to municipal emergency coordination if two or more corridors remain in Severe status."
+        ),
+        "public_health_advisory": (
+            f"Air quality is currently under {urgency.lower()} pressure in parts of {city}, especially near {top[0]}, {top[1]}, and {top[2]}. "
+            "Children, older adults, and people with asthma or heart and lung conditions should limit strenuous outdoor activity near major roads and industrial areas today. "
+            "Keep windows closed where possible and use indoor air filtration if available."
+        ),
+    }
 
 
 def city_status(avg_risk: float) -> str:
@@ -1002,7 +936,7 @@ class TAQOISApp:
                 </div>
                 <div>
                   <span class="alert-chip" style="background:rgba(67,200,230,0.12); color:#8ed8ea;">3D Geospatial Ops</span>
-                  <span class="alert-chip" style="background:rgba(158,166,255,0.12); color:#c2c7ff;">Gemini COO</span>
+                  <span class="alert-chip" style="background:rgba(158,166,255,0.12); color:#c2c7ff;">Intel Engine</span>
                   <span class="alert-chip" style="background:rgba(102,208,162,0.12); color:#8fe0bc;">Simulation Engine</span>
                 </div>
               </div>
@@ -1028,8 +962,8 @@ class TAQOISApp:
             emergency_event = st.toggle("Special Event / Incident Surge", value=False)
 
             st.markdown("---")
-            st.caption("Gemini 2.5 Flash")
-            st.code("Set GEMINI_API_KEY in your environment to enable live AI briefings.", language="bash")
+            st.caption("Deterministic Intel Engine")
+            st.caption("Briefings are generated from simulation data.")
 
         return SidebarControls(
             page=page,
@@ -1201,8 +1135,7 @@ class TAQOISApp:
             },
         }
 
-        coo = GeminiCOO()
-        intel = coo.generate(summary_payload)
+        intel = generate_intel(summary_payload)
         tab1, tab2, tab3 = st.tabs(["Executive Briefing", "Tactical Response Plan", "Public Health Advisory"])
 
         with tab1:

@@ -1,6 +1,6 @@
 # TAQOIS Industries 4.0 - Air Quality Command Dashboard
 
-Professional Streamlit command-and-control dashboard for corridor-level air quality risk simulation with 3D geospatial visualization and Gemini-assisted operational intelligence.
+Professional Streamlit command-and-control dashboard for corridor-level air quality risk simulation with 3D geospatial visualization and deterministic operational intelligence.
 
 ## What This App Does
 
@@ -9,7 +9,7 @@ The dashboard simulates air-quality pressure across key traffic and industrial c
 1. City-level status and hotspot counts.
 2. 3D map for quick spatial risk scanning.
 3. Corridor matrix with PM2.5, NO2, and exposure estimates.
-4. AI-generated executive and response content (when Gemini key is available).
+4. Deterministic executive and response content generated from simulation data.
 
 ## Current Scope
 
@@ -57,15 +57,13 @@ Each row is a corridor with:
 3. NO2: estimated nitrogen dioxide level.
 4. Exposure: combined estimate weighted by population pressure.
 
-### 4. Gemini 2.5 Flash Integration
+### 4. Operational Intelligence
 
-When GEMINI_API_KEY is available, the app generates:
+The app generates deterministic briefings from simulation data:
 
 1. Executive Briefing
 2. Tactical Response Plan
 3. Public Health Advisory
-
-If Gemini is unavailable, the app automatically falls back to deterministic local text.
 
 ## Tech Stack
 
@@ -73,8 +71,7 @@ If Gemini is unavailable, the app automatically falls back to deterministic loca
 2. Streamlit
 3. Pandas
 4. PyDeck
-5. google-generativeai
-6. python-dotenv
+5. python-dotenv
 
 ## Local Setup (VS Code Terminal)
 
@@ -93,20 +90,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 3. Configure Gemini key
-
-Create a .env file in project root:
-
-```env
-GEMINI_API_KEY=your_real_key_here
-```
-
-Important behavior:
-
-1. The app loads .env automatically.
-2. Existing environment variables are not overridden by .env values.
-
-### 4. Run the app
+### 3. Run the app
 
 ```powershell
 streamlit run app.py
@@ -157,12 +141,6 @@ When presenting, keep language simple:
 1. Hard refresh browser.
 2. Restart Streamlit.
 
-### Gemini content is not changing
-
-1. Confirm key exists in .env.
-2. Restart Streamlit after updating .env.
-3. Verify internet connectivity.
-
 ### Map does not reflect expected risk
 
 1. Change sidebar controls and confirm metric cards update.
@@ -170,8 +148,7 @@ When presenting, keep language simple:
 
 ## Known Warnings
 
-1. google-generativeai shows a deprecation warning upstream; app still runs.
-2. Streamlit warns about future use_container_width changes; non-blocking.
+1. Streamlit warns about future use_container_width changes; non-blocking.
 
 ## Roadmap
 
