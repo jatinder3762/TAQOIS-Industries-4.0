@@ -1,83 +1,105 @@
-# TAQOIS Industries 4.0 - Air Quality Command Dashboard
+# TAQOIS Industries 4.0 — Air Quality Command & Control
 
-Professional Streamlit command-and-control dashboard for corridor-level air quality risk simulation with 3D geospatial visualization and deterministic operational intelligence.
+Cyberpunk-enterprise Streamlit platform for corridor-level air quality simulation, XGBoost-powered forecasting, real-time data ingestion, and operational intelligence across Canadian cities.
 
 ## What This App Does
 
-The dashboard simulates air-quality pressure across key traffic and industrial corridors and converts that into actionable operations views:
+TAQOIS monitors air-quality pressure across traffic and industrial corridors and converts that into actionable intelligence:
 
-1. City-level status and hotspot counts.
-2. 3D map for quick spatial risk scanning.
-3. Corridor matrix with PM2.5, NO2, and exposure estimates.
-4. Deterministic executive and response content generated from simulation data.
+1. **Dashboard** — City-level status, hotspot counts, 3D geospatial risk map, threat matrix, and adaptive executive briefings.
+2. **AI Forecast** — XGBoost ML predictions for 2, 4, and 6-hour horizons with confidence intervals and model explainability.
+3. **Scenario Simulation** — Animated event cinema (wildfire, inversion, industrial incident, heatwave) with frame-by-frame playback, advisory generation, and simulation logs.
 
-## Current Scope
+## Architecture
 
-This version is simulation-based for operational prototyping.
+```
+app.py                  Main Streamlit application (3 pages, sidebar controls)
+forecast_engine.py      XGBoost forecasting engine (train/predict/feature importance)
+data_ingestion.py       Real-time API integration (OpenWeatherMap + AQICN) with caching
+database.py             SQLite persistence (predictions, actions, audit log)
+```
 
-1. Data shown is synthetic (model-driven), not live regulatory feed yet.
-2. City switcher is available in the sidebar.
-3. Login page is planned for a future upgrade.
+## Corridors Covered
+
+- **Toronto** — 15 corridors (Highway 401, Gardiner, DVP, Scarborough Industrial, etc.)
+- **Vancouver** — 6 corridors (Broadway/Cambie, Hastings Industrial, etc.)
+- **Montreal** — 6 corridors (Autoroute 40/Decarie, Ville-Marie, etc.)
 
 ## Features
 
-### 1. Simulation Controls
+### 1. Simulation Controls (Sidebar)
 
-Sidebar controls:
+Sidebar controls available on all pages:
 
-1. City
-2. Traffic Volume
-3. Weather Inversion
-4. Industrial Activity
-5. Wind Speed
-6. Humidity
-7. Special Event / Incident Surge
+1. **City** — Switch between Toronto, Vancouver, Montreal
+2. **Traffic Volume** (0–100)
+3. **Weather Inversion** (0–100)
+4. **Industrial Activity** (0–100)
+5. **Wind Speed** (0–60 km/h)
+6. **Humidity** (10–100%)
+7. **Special Event / Incident Surge** — Toggle for emergency scenarios (e.g., chemical spill, warehouse fire, train derailment)
 
 These inputs dynamically recalculate corridor risk and update all visuals in real time.
 
-### 2. 3D Corridor Map (PyDeck)
+### 2. Dashboard
 
-Map interpretation:
+- **Metric Cards** — Citywide status, critical hotspots, peak corridor risk, primary drivers.
+- **3D Corridor Map (PyDeck)** — Column height = risk intensity, color = severity band (green/cyan/amber/red). Hover for PM2.5, NO2, risk level.
+- **Threat Matrix** — Sortable table with risk, PM2.5, NO2, exposure index per corridor.
+- **Operational Intelligence** — Context-aware briefings (Executive, Tactical Response, Public Health Advisory) that adapt to current conditions.
 
-1. Dot: corridor location.
-2. 3D column height: risk intensity.
-3. Column color:
-   - Green: Low
-   - Cyan: Elevated
-   - Amber: High
-   - Red: Severe
-4. Hover tooltip shows corridor name, risk score, PM2.5, and NO2.
+### 3. AI Forecast (XGBoost)
 
-### 3. Threat Matrix
+- **ML Model** — 3 XGBoost regressors (risk_score, PM2.5, NO2) trained on 6000 synthetic corridor samples.
+- **Horizons** — 2, 4, and 6-hour predictions with 95% confidence intervals.
+- **Live Data Ingestion** — Fetch real-time weather and air quality from OpenWeatherMap and AQICN APIs.
+- **Forecast Map** — 3D visualization of predicted risk per corridor.
+- **Confidence Interval Chart** — Bar + marker chart showing prediction bounds.
+- **Model Explainability** — Feature importance plots for risk_score and PM2.5.
+- **Prediction History** — All forecasts stored in SQLite with audit trail.
 
-Each row is a corridor with:
+### 4. Scenario Simulation (Cinema Mode)
 
-1. Risk (0 to 100): higher means more pressure.
-2. PM2.5: estimated fine particulate level.
-3. NO2: estimated nitrogen dioxide level.
-4. Exposure: combined estimate weighted by population pressure.
+- **5 Preset Scenarios** — Normal Operations, Wildfire/Smoke, Severe Inversion, Industrial Incident, Rush Hour + Heatwave.
+- **48-Frame Animation** — 5 phases (Normal → Event Building → Peak Intensity → Sustained Impact → Recovery).
+- **Real-Time Chart** — PM2.5 and risk score timeline that grows frame by frame.
+- **Advisory System** — Automatic HIGH/SEVERE advisories triggered at threshold crossings.
+- **Simulation Log** — Event-by-event log of phase transitions, alerts, and playback controls.
+- **Adjustable Speed** — 0.5x, 1x, 2x, 3x playback.
 
-### 4. Operational Intelligence
+### 5. Decision Support Intelligence
 
-The app generates deterministic briefings from simulation data:
+The `generate_intel()` engine produces adaptive briefings based on:
 
-1. Executive Briefing
-2. Tactical Response Plan
-3. Public Health Advisory
+- Driver ranking (traffic, inversion, industrial — sorted by current pressure)
+- Wind speed and humidity analysis
+- Emergency event detection
+- Forecast-aware notes when risk exceeds thresholds
+
+### 6. Database & Audit
+
+SQLite persistence via `database.py`:
+
+- **predictions** — Every forecast stored with corridor, horizon, risk, PM2.5, NO2, confidence.
+- **actions** — Auto-generated escalation actions for SEVERE corridors.
+- **audit_log** — System events (model training, data fetches, etc.).
 
 ## Tech Stack
 
 1. Python 3.10+
-2. Streamlit
-3. Pandas
-4. PyDeck
-5. python-dotenv
+2. Streamlit 1.44+
+3. XGBoost 2.0+
+4. scikit-learn 1.4+
+5. Pandas / NumPy
+6. PyDeck (3D maps)
+7. Plotly (charts)
+8. Requests (API calls)
+9. python-dotenv
+10. SQLite3
 
-## Local Setup (VS Code Terminal)
+## Local Setup
 
 ### 1. Create and activate virtual environment
-
-Windows PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -90,73 +112,83 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 3. Run the app
+### 3. Configure API keys
+
+Copy `env.example` to `.env` and add your keys:
+
+```
+OPENWEATHER_API_KEY=your_openweathermap_key
+AQICN_API_TOKEN=your_aqicn_token
+```
+
+Free tier keys work. The app falls back to synthetic data if keys are missing.
+
+### 4. Run the app
 
 ```powershell
 streamlit run app.py
 ```
 
-## How To Use (Zero-Knowledge Walkthrough)
+## How To Use
 
-Use this sequence during demos:
+### Dashboard Demo
 
 1. Select a city from the sidebar.
-2. Move Traffic, Weather Inversion, and Industrial sliders.
-3. Show city status cards changing instantly.
-4. Explain map quickly:
-   - Dot = where
-   - Height = how bad
-   - Color = severity
-5. Hover columns to show PM2.5 and NO2 details.
-6. Open AI tabs and read generated actions/advisories.
+2. Adjust Traffic, Weather Inversion, and Industrial sliders.
+3. Watch metric cards and 3D map update in real time.
+4. Read the Executive Briefing and Tactical Response tabs.
 
-## How The Model Works (Simple)
+### AI Forecast Demo
+
+1. Navigate to AI Forecast page.
+2. Model trains automatically on first load.
+3. Optionally fetch live data via the expander button.
+4. Switch between 2h, 4h, 6h horizons.
+5. Review confidence intervals and feature importance charts.
+
+### Scenario Simulation Demo
+
+1. Navigate to Scenario Simulation page.
+2. Pick a scenario (e.g., Wildfire / Smoke Event).
+3. Press Auto Run — watch the animation unfold.
+4. Observe advisory generation and phase transitions in the log.
+
+## How The Models Work
+
+### Deterministic Simulation Engine
 
 For each corridor, the engine combines:
 
 1. Emissions pressure drivers: traffic, inversion, industrial load.
-2. Weather modifiers: wind and humidity.
+2. Weather modifiers: wind speed and humidity.
 3. Corridor sensitivity and population index.
+4. Emergency event penalty.
 
-Then it outputs:
+Outputs: risk score (0–100), risk level, PM2.5/NO2 estimates, exposure index.
 
-1. Risk score (0 to 100)
-2. Risk level band
-3. Estimated PM2.5 and NO2
-4. Exposure index
+### XGBoost Forecast Engine
 
-## Insights To Communicate Clearly
-
-When presenting, keep language simple:
-
-1. Citywide Status: overall pressure level right now.
-2. Critical Hotspots: count of corridors in severe band.
-3. Peak Corridor Risk: worst location currently.
-4. Primary Drivers: major causes from the simulation settings.
+1. Generates 6000 synthetic training samples across all corridors.
+2. Trains 3 separate XGBoost regressors (risk_score, pm25, no2).
+3. Predictions include horizon-scaled adjustments and 95% confidence intervals.
+4. Feature importance extracted via built-in XGBoost gain scores.
 
 ## Troubleshooting
 
 ### App starts but page looks old
 
-1. Hard refresh browser.
+1. Hard refresh browser (Ctrl+Shift+R).
 2. Restart Streamlit.
 
 ### Map does not reflect expected risk
 
 1. Change sidebar controls and confirm metric cards update.
-2. Ensure selected city is the one you are presenting.
+2. Ensure selected city matches what you are presenting.
 
-## Known Warnings
+### API fetch returns synthetic data
 
-1. Streamlit warns about future use_container_width changes; non-blocking.
-
-## Roadmap
-
-Planned next upgrades:
-
-1. Live Canadian air-quality data integration.
-2. Login/authentication before dashboard access.
-3. Data source status badge and model confidence indicators.
+1. Check `.env` file has valid API keys.
+2. Free tier rate limits may apply — cached data (15 min TTL) is used when available.
 
 ## Repository Files
 

@@ -8,8 +8,22 @@ import pydeck as pdk
 import streamlit as st
 from dotenv import load_dotenv
 
+from data_ingestion import fetch_corridor_conditions, conditions_to_sim_inputs
+from forecast_engine import get_forecast_model, FEATURE_COLS
+from database import (
+    init_db,
+    store_predictions,
+    store_action,
+    get_recent_predictions,
+    get_recent_actions,
+    get_audit_log,
+    log_event,
+    prediction_count_by_day,
+)
+
 
 load_dotenv(override=False)
+init_db()
 
 
 st.set_page_config(
@@ -231,6 +245,111 @@ h1, h2, h3 { color: var(--text); }
     border-radius: 14px;
 }
 
+/* Expander */
+[data-testid="stExpander"] {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+}
+[data-testid="stExpander"] summary {
+    color: var(--cyan-soft) !important;
+}
+[data-testid="stExpander"] summary:hover {
+    color: var(--cyan) !important;
+}
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] {
+    background: transparent;
+}
+
+/* Buttons */
+.stButton > button {
+    background: linear-gradient(135deg, rgba(67,200,230,0.18), rgba(158,166,255,0.12));
+    color: var(--cyan-soft) !important;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.25s ease;
+}
+.stButton > button:hover {
+    background: linear-gradient(135deg, rgba(67,200,230,0.32), rgba(158,166,255,0.22));
+    border-color: rgba(142, 216, 234, 0.50);
+    color: #fff !important;
+    box-shadow: 0 0 18px rgba(67, 200, 230, 0.18);
+}
+.stButton > button:active,
+.stButton > button:focus {
+    background: linear-gradient(135deg, rgba(67,200,230,0.28), rgba(158,166,255,0.18));
+    color: #fff !important;
+    border-color: rgba(142, 216, 234, 0.44);
+}
+
+/* Radio buttons & toggles */
+[data-testid="stRadio"] label:hover {
+    color: var(--cyan) !important;
+}
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: var(--cyan) !important;
+    border-color: var(--cyan) !important;
+}
+.stSlider [data-baseweb="slider"] [role="slider"]:hover {
+    box-shadow: 0 0 10px rgba(67, 200, 230, 0.40);
+}
+
+/* Selectbox & inputs */
+[data-baseweb="select"] > div {
+    background: rgba(10, 18, 30, 0.80) !important;
+    border-color: var(--border) !important;
+    color: var(--text) !important;
+}
+[data-baseweb="select"] > div:hover {
+    border-color: rgba(142, 216, 234, 0.40) !important;
+}
+[data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="select"] [role="listbox"] {
+    background: rgba(12, 20, 33, 0.96) !important;
+    border: 1px solid var(--border) !important;
+}
+[data-baseweb="select"] [role="option"] {
+    color: var(--text) !important;
+}
+[data-baseweb="select"] [role="option"]:hover {
+    background: rgba(67, 200, 230, 0.14) !important;
+}
+
+/* Toggle */
+[data-testid="stToggle"] label span {
+    color: var(--muted) !important;
+}
+
+/* Metric cards (Streamlit native) */
+[data-testid="stMetric"] {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+}
+[data-testid="stMetric"]:hover {
+    border-color: rgba(142, 216, 234, 0.44);
+    box-shadow: 0 0 16px rgba(67, 200, 230, 0.10);
+}
+[data-testid="stMetricLabel"] {
+    color: var(--muted) !important;
+}
+[data-testid="stMetricValue"] {
+    color: var(--text) !important;
+}
+
+/* Spinner */
+.stSpinner > div {
+    border-top-color: var(--cyan) !important;
+}
+
+/* Success / warning / error / info alerts */
+[data-testid="stAlert"] {
+    background: rgba(12, 20, 33, 0.80) !important;
+    border-radius: 12px;
+}
+
 @media (max-width: 1200px) {
     .metric-grid {
         grid-template-columns: repeat(2, 1fr);
@@ -301,6 +420,87 @@ CORRIDORS = [
         "sensitivity": 1.10,
         "baseline_pm25": 15.2,
         "baseline_no2": 27.5,
+    },
+    {
+        "name": "Yonge / Finch Corridor",
+        "lat": 43.7809,
+        "lon": -79.4149,
+        "population_index": 0.87,
+        "sensitivity": 1.12,
+        "baseline_pm25": 13.8,
+        "baseline_no2": 29.5,
+    },
+    {
+        "name": "Queen / King Streetcar Belt",
+        "lat": 43.6505,
+        "lon": -79.3783,
+        "population_index": 0.94,
+        "sensitivity": 1.09,
+        "baseline_pm25": 12.9,
+        "baseline_no2": 28.4,
+    },
+    {
+        "name": "Keele / Junction Industrial",
+        "lat": 43.6656,
+        "lon": -79.4630,
+        "population_index": 0.78,
+        "sensitivity": 1.15,
+        "baseline_pm25": 14.6,
+        "baseline_no2": 27.8,
+    },
+    {
+        "name": "Eglinton Crosstown Corridor",
+        "lat": 43.7070,
+        "lon": -79.3980,
+        "population_index": 0.86,
+        "sensitivity": 1.08,
+        "baseline_pm25": 13.1,
+        "baseline_no2": 28.0,
+    },
+    {
+        "name": "Dundas / Ossington Residential",
+        "lat": 43.6510,
+        "lon": -79.4220,
+        "population_index": 0.90,
+        "sensitivity": 1.05,
+        "baseline_pm25": 11.8,
+        "baseline_no2": 25.6,
+    },
+    {
+        "name": "Steeles / Markham Gateway",
+        "lat": 43.8010,
+        "lon": -79.3280,
+        "population_index": 0.77,
+        "sensitivity": 1.13,
+        "baseline_pm25": 14.2,
+        "baseline_no2": 30.1,
+    },
+    {
+        "name": "Bloor / Danforth Transit Line",
+        "lat": 43.6710,
+        "lon": -79.3260,
+        "population_index": 0.88,
+        "sensitivity": 1.07,
+        "baseline_pm25": 12.4,
+        "baseline_no2": 26.9,
+    },
+    {
+        "name": "Weston / 401 Industrial Node",
+        "lat": 43.7060,
+        "lon": -79.5150,
+        "population_index": 0.73,
+        "sensitivity": 1.17,
+        "baseline_pm25": 15.5,
+        "baseline_no2": 31.2,
+    },
+    {
+        "name": "Waterfront / Port Lands",
+        "lat": 43.6390,
+        "lon": -79.3490,
+        "population_index": 0.80,
+        "sensitivity": 1.10,
+        "baseline_pm25": 13.3,
+        "baseline_no2": 27.2,
     },
 ]
 
@@ -565,24 +765,90 @@ def generate_intel(payload: Dict) -> Dict[str, str]:
     city = payload.get("city", "the selected city")
     top = payload["top_corridors"]
     avg = payload["avg_risk"]
+    max_risk = payload.get("max_risk", avg)
     urgency = payload["citywide_status"]
+    drivers = payload.get("drivers", {})
+
+    # Adaptive driver analysis
+    driver_ranking = sorted(
+        [
+            ("traffic congestion", drivers.get("traffic_volume", 0)),
+            ("atmospheric inversion", drivers.get("weather_inversion", 0)),
+            ("industrial emissions", drivers.get("industrial_activity", 0)),
+        ],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    top_driver = driver_ranking[0][0]
+    wind = drivers.get("wind_speed", 15)
+    humidity = drivers.get("humidity", 50)
+    emergency = drivers.get("special_event", False)
+
+    # Context-sensitive recommendations
+    response_actions = []
+    if drivers.get("traffic_volume", 0) >= 70:
+        response_actions.append(
+            "Deploy traffic-flow optimization on the top-three affected corridors; "
+            "coordinate with Transportation Services for signal timing adjustments."
+        )
+    if drivers.get("weather_inversion", 0) >= 60:
+        response_actions.append(
+            "Inversion trapping detected — advise Toronto Public Health to prepare "
+            "sensitive-population alerts. Emissions cannot disperse effectively."
+        )
+    if drivers.get("industrial_activity", 0) >= 65:
+        response_actions.append(
+            "Coordinate with industrial compliance partners to defer discretionary "
+            "emissions in the Scarborough and Etobicoke zones."
+        )
+    if wind < 10:
+        response_actions.append(
+            "Wind speed critically low — pollutant dispersion is impaired. "
+            "Increase monitoring frequency to every 15 minutes."
+        )
+    if emergency:
+        response_actions.append(
+            "Emergency event active — escalate to Toronto Emergency Management. "
+            "Consider activating the smoke/heat coordination protocol."
+        )
+    if avg >= 75:
+        response_actions.append(
+            "SEVERE threshold crossed — recommend immediate coordination call "
+            "between Public Health, Transportation, and Emergency Management."
+        )
+    if not response_actions:
+        response_actions.append(
+            "Conditions within normal range. Maintain standard monitoring cadence."
+        )
+
+    numbered_actions = "\n".join(f"{i+1}. {a}" for i, a in enumerate(response_actions))
+
+    # Forecast-aware briefing
+    forecast_note = ""
+    if avg >= 50:
+        forecast_note = (
+            f" Forecasting models project continued elevated risk over the next 2-4 hours "
+            f"unless {top_driver} pressure subsides. Re-assessment recommended at 30-minute intervals."
+        )
+
     return {
         "executive_briefing": (
-            f"{city} air-quality simulation indicates a {urgency} citywide posture with an average corridor risk score of {avg}. "
-            f"Highest-risk corridors are {top[0]}, {top[1]}, and {top[2]}. "
-            f"Immediate focus should prioritize traffic flow smoothing, industrial emissions coordination, and targeted public messaging over the next 2 hours."
+            f"{city} air-quality intelligence indicates a **{urgency}** citywide posture "
+            f"with an average corridor risk of **{avg}** and peak risk of **{max_risk}**. "
+            f"The primary stress driver is **{top_driver}** "
+            f"(wind: {wind} km/h, humidity: {humidity}%). "
+            f"Priority corridors: **{top[0]}**, **{top[1]}**, and **{top[2]}**."
+            f"{forecast_note}"
         ),
-        "tactical_response_plan": (
-            "1. Activate corridor monitoring escalation for the top three hotspots.\n"
-            "2. Coordinate with transportation control to reduce stop-and-go congestion on affected links.\n"
-            "3. Notify industrial compliance partners in impacted zones to minimize discretionary emissions.\n"
-            "4. Push public health advisories to sensitive populations near severe and high-risk corridors.\n"
-            "5. Re-run simulation every 15 minutes and escalate to municipal emergency coordination if two or more corridors remain in Severe status."
-        ),
+        "tactical_response_plan": numbered_actions,
         "public_health_advisory": (
-            f"Air quality is currently under {urgency.lower()} pressure in parts of {city}, especially near {top[0]}, {top[1]}, and {top[2]}. "
-            "Children, older adults, and people with asthma or heart and lung conditions should limit strenuous outdoor activity near major roads and industrial areas today. "
-            "Keep windows closed where possible and use indoor air filtration if available."
+            f"Air quality is currently under **{urgency.lower()}** pressure in parts of {city}, "
+            f"concentrated near **{top[0]}**, **{top[1]}**, and **{top[2]}**. "
+            f"The dominant factor is {top_driver}. "
+            "Children, older adults, and individuals with respiratory or cardiovascular "
+            "conditions should limit outdoor exertion near major corridors. "
+            "Keep windows closed and use air filtration where available. "
+            f"{'An emergency event is active — follow municipal emergency guidance.' if emergency else 'Monitor city advisories for updates.'}"
         ),
     }
 
@@ -696,6 +962,315 @@ class ScenarioSimulationController:
         return df, avg_risk, max_pm25, avg_no2, sim, phase_label, phase_color
 
 
+        max_pm25 = round(df["pm25_est"].max(), 1)
+        avg_no2 = round(df["no2_est"].mean(), 1)
+        return df, avg_risk, max_pm25, avg_no2, sim, phase_label, phase_color
+
+
+# ======================================================================
+# FORECAST PAGE
+# ======================================================================
+
+def render_forecast_page(city_config: dict, selected_city: str, controls) -> None:  # noqa: C901
+    import plotly.graph_objects as go
+    from datetime import datetime, timezone
+
+    st.markdown(
+        """
+        <div class="hero">
+          <div>
+            <div style="font-size:0.85rem; color:#8bb8c8; letter-spacing:0.12em; text-transform:uppercase;">AI Forecasting Engine</div>
+            <h1 class="hero-title" style="margin:0.2rem 0 0.35rem 0;">Short-Horizon Air Quality Forecast</h1>
+            <div class="hero-subtitle">XGBoost-powered predictions for 2, 4, and 6-hour horizons across all monitored corridors. Includes confidence intervals and model explainability.</div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    corridors = city_config["corridors"]
+    model = get_forecast_model()
+
+    # Train model if needed
+    if not model.trained:
+        with st.spinner("Training XGBoost forecasting model on corridor data..."):
+            metrics = model.train(corridors)
+            log_event("model_trained", metrics)
+        st.success(
+            f"Model trained — RMSE: risk={metrics['risk_score_rmse']}, "
+            f"PM2.5={metrics['pm25_rmse']}, NO2={metrics['no2_rmse']}"
+        )
+
+    # Fetch live conditions
+    st.markdown('<div class="section-title">Live Data Ingestion</div>', unsafe_allow_html=True)
+
+    with st.expander("Fetch real-time conditions from APIs", expanded=False):
+        if st.button("Fetch Live Weather & AQ Data", key="fetch_live"):
+            with st.spinner("Querying OpenWeatherMap & AQICN APIs..."):
+                live_data = fetch_corridor_conditions(corridors)
+                st.session_state["live_conditions"] = live_data
+                log_event("live_data_fetched", {"city": selected_city, "corridors": len(live_data)})
+            st.success(f"Fetched data for {len(live_data)} corridors.")
+
+        if st.session_state.get("live_conditions"):
+            live = st.session_state["live_conditions"]
+            live_summary = []
+            for item in live:
+                w = item["weather"]
+                aq = item["air_quality"]
+                live_summary.append({
+                    "Corridor": item["corridor"],
+                    "Temp (°C)": w.get("temperature_c"),
+                    "Wind (km/h)": w.get("wind_speed_kmh"),
+                    "Humidity (%)": w.get("humidity"),
+                    "AQI": aq.get("aqi"),
+                    "PM2.5": aq.get("pm25"),
+                    "NO2": aq.get("no2"),
+                    "Source": w.get("source", ""),
+                })
+            st.dataframe(pd.DataFrame(live_summary), use_container_width=True, hide_index=True)
+
+    # Build conditions from sidebar sliders (or live data if available)
+    conditions = {
+        "traffic_volume": controls.traffic_volume,
+        "inversion_strength": controls.inversion_strength,
+        "industrial_activity": controls.industrial_activity,
+        "wind_speed": controls.wind_speed,
+        "humidity": controls.humidity,
+        "temperature_c": 20,
+        "emergency_event": int(controls.emergency_event),
+    }
+
+    if st.session_state.get("live_conditions"):
+        first_weather = st.session_state["live_conditions"][0]["weather"]
+        live_sim = conditions_to_sim_inputs(first_weather)
+        conditions["wind_speed"] = live_sim["wind_speed"]
+        conditions["humidity"] = live_sim["humidity"]
+        conditions["inversion_strength"] = live_sim["inversion_strength"]
+        conditions["temperature_c"] = live_sim["temperature_c"]
+
+    # Run forecast
+    st.markdown('<div class="section-title">Corridor Forecast (2-6 Hour Horizon)</div>', unsafe_allow_html=True)
+
+    forecasts = model.predict(corridors, conditions, horizons_hours=[2, 4, 6])
+
+    # Store predictions in database
+    store_predictions(selected_city, forecasts, conditions)
+
+    # Horizon selector
+    horizon = st.radio("Forecast horizon", [2, 4, 6], horizontal=True, format_func=lambda h: f"{h}-Hour")
+    df_h = forecasts[forecasts["horizon_hours"] == horizon].copy()
+    df_h = df_h.sort_values("risk_score", ascending=False).reset_index(drop=True)
+
+    # Metrics row
+    avg_risk = round(df_h["risk_score"].mean(), 1)
+    max_pm25 = round(df_h["pm25"].max(), 1)
+    hotspots = int((df_h["risk_score"] >= 75).sum())
+    status = city_status(avg_risk)
+
+    st.markdown(
+        f"""
+        <div class="metric-grid">
+            <div class="metric-card"><div class="metric-label">Predicted Status ({horizon}h)</div><div class="metric-value">{status}</div><div class="metric-delta">Avg risk {avg_risk}</div></div>
+            <div class="metric-card"><div class="metric-label">Predicted Hotspots</div><div class="metric-value">{hotspots}</div><div class="metric-delta">Corridors expected at SEVERE</div></div>
+            <div class="metric-card"><div class="metric-label">Peak PM2.5 Forecast</div><div class="metric-value">{max_pm25}</div><div class="metric-delta">Highest corridor estimate</div></div>
+            <div class="metric-card"><div class="metric-label">Avg Confidence</div><div class="metric-value">{round(df_h['risk_score_confidence'].mean() * 100, 1)}%</div><div class="metric-delta">Model certainty</div></div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # Forecast table and map
+    fc1, fc2 = st.columns([1.35, 1])
+    with fc1:
+        st.markdown('<div class="section-title">Forecast Map</div>', unsafe_allow_html=True)
+
+        df_h["elevation"] = df_h["risk_score"] * 120
+        df_h["radius"] = 380 + df_h["risk_score"] * 10
+        df_h["color_rgba"] = df_h["risk_score"].apply(
+            lambda s: [
+                int(min(255, 87 + (s / 100) * 168)),
+                int(max(94, 255 - (s / 100) * 161)),
+                int(max(126, 154 - (s / 50) * 28)),
+                210,
+            ]
+        )
+
+        deck = pdk.Deck(
+            map_style="dark",
+            initial_view_state=pdk.ViewState(
+                latitude=city_config["center"]["lat"],
+                longitude=city_config["center"]["lon"],
+                zoom=city_config["center"]["zoom"],
+                pitch=48,
+                bearing=24,
+            ),
+            layers=[
+                pdk.Layer(
+                    "ColumnLayer",
+                    data=df_h,
+                    get_position="[lon, lat]",
+                    get_elevation="elevation",
+                    elevation_scale=8,
+                    radius="radius",
+                    get_fill_color="color_rgba",
+                    pickable=True,
+                    auto_highlight=True,
+                ),
+                pdk.Layer(
+                    "ScatterplotLayer",
+                    data=df_h,
+                    get_position="[lon, lat]",
+                    get_radius=340,
+                    radius_min_pixels=6,
+                    stroked=True,
+                    filled=True,
+                    get_fill_color=[142, 216, 234, 230],
+                    get_line_color=[232, 244, 255, 255],
+                    line_width_min_pixels=2,
+                    pickable=True,
+                ),
+            ],
+            tooltip={
+                "html": (
+                    "<b>{corridor}</b><br/>"
+                    "Predicted Risk: {risk_score} [{risk_score_lower} - {risk_score_upper}]<br/>"
+                    "PM2.5: {pm25}<br/>NO2: {no2}<br/>"
+                    "Confidence: {risk_score_confidence}"
+                ),
+            },
+        )
+        st.pydeck_chart(deck, use_container_width=True)
+        st.caption(f"Forecast for T+{horizon}h. Column height = predicted risk. Hover for confidence intervals.")
+
+    with fc2:
+        st.markdown('<div class="section-title">Forecast Detail Table</div>', unsafe_allow_html=True)
+        display_df = df_h[[
+            "corridor", "risk_score", "risk_score_lower", "risk_score_upper",
+            "pm25", "no2", "risk_score_confidence",
+        ]].rename(columns={
+            "corridor": "Corridor",
+            "risk_score": "Risk",
+            "risk_score_lower": "Low",
+            "risk_score_upper": "High",
+            "pm25": "PM2.5",
+            "no2": "NO2",
+            "risk_score_confidence": "Confidence",
+        })
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        # Auto-generate recommended actions for high-risk corridors
+        severe_corridors = df_h[df_h["risk_score"] >= 75]["corridor"].tolist()
+        high_corridors = df_h[(df_h["risk_score"] >= 50) & (df_h["risk_score"] < 75)]["corridor"].tolist()
+
+        if severe_corridors:
+            st.error(f"**SEVERE risk predicted** at: {', '.join(severe_corridors)}")
+            for sc in severe_corridors:
+                store_action(
+                    selected_city, sc, "escalation",
+                    f"Predicted SEVERE risk at {horizon}h horizon — escalate monitoring.",
+                    triggered_by="forecast_engine",
+                )
+        if high_corridors:
+            st.warning(f"**HIGH risk predicted** at: {', '.join(high_corridors)}")
+
+    # Confidence interval chart
+    st.markdown('<div class="section-title">Prediction Confidence Intervals</div>', unsafe_allow_html=True)
+
+    fig_ci = go.Figure()
+    corridor_names = df_h["corridor"].tolist()
+    fig_ci.add_trace(go.Bar(
+        name="Risk (predicted)",
+        x=corridor_names,
+        y=df_h["risk_score"].tolist(),
+        marker_color="#43c8e6",
+    ))
+    fig_ci.add_trace(go.Scatter(
+        name="95% CI Upper",
+        x=corridor_names,
+        y=df_h["risk_score_upper"].tolist(),
+        mode="markers",
+        marker=dict(symbol="line-ew-open", size=12, color="#ffc857", line_width=2),
+    ))
+    fig_ci.add_trace(go.Scatter(
+        name="95% CI Lower",
+        x=corridor_names,
+        y=df_h["risk_score_lower"].tolist(),
+        mode="markers",
+        marker=dict(symbol="line-ew-open", size=12, color="#66d0a2", line_width=2),
+    ))
+    fig_ci.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(10,18,30,0.72)",
+        font=dict(family="Space Grotesk, sans-serif", color="#c8d9eb"),
+        height=320,
+        margin=dict(l=0, r=0, t=12, b=60),
+        xaxis=dict(tickangle=-35),
+        barmode="group",
+    )
+    st.plotly_chart(fig_ci, use_container_width=True, config={"displayModeBar": False})
+
+    # Model Explainability
+    st.markdown('<div class="section-title">Model Explainability — Feature Importance</div>', unsafe_allow_html=True)
+
+    fi_tab1, fi_tab2 = st.tabs(["Risk Score", "PM2.5"])
+    for tab, target in [(fi_tab1, "risk_score"), (fi_tab2, "pm25")]:
+        with tab:
+            fi_df = model.feature_importance(target)
+            fig_fi = go.Figure(go.Bar(
+                x=fi_df["importance"].tolist(),
+                y=fi_df["feature"].tolist(),
+                orientation="h",
+                marker_color="#9ea6ff",
+            ))
+            fig_fi.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(10,18,30,0.72)",
+                font=dict(family="Space Grotesk, sans-serif", color="#c8d9eb"),
+                height=340,
+                margin=dict(l=0, r=0, t=8, b=8),
+                yaxis=dict(autorange="reversed"),
+                xaxis_title="Importance",
+            )
+            st.plotly_chart(fig_fi, use_container_width=True, config={"displayModeBar": False})
+
+    # Prediction History from DB
+    st.markdown('<div class="section-title">Prediction History & Audit</div>', unsafe_allow_html=True)
+
+    hist_tab1, hist_tab2, hist_tab3 = st.tabs(["Recent Predictions", "Actions Log", "System Audit"])
+    with hist_tab1:
+        recent_preds = get_recent_predictions(selected_city, limit=60)
+        if recent_preds:
+            rp_df = pd.DataFrame(recent_preds)[
+                ["created_at", "corridor", "horizon_h", "risk_score", "pm25", "no2", "confidence"]
+            ]
+            st.dataframe(rp_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No prediction history yet. Forecasts are recorded each time this page loads.")
+
+    with hist_tab2:
+        recent_acts = get_recent_actions(selected_city, limit=30)
+        if recent_acts:
+            st.dataframe(pd.DataFrame(recent_acts), use_container_width=True, hide_index=True)
+        else:
+            st.info("No actions recorded yet.")
+
+    with hist_tab3:
+        audit = get_audit_log(limit=50)
+        if audit:
+            st.dataframe(pd.DataFrame(audit), use_container_width=True, hide_index=True)
+        else:
+            st.info("No audit events yet.")
+
+    st.markdown(
+        '<div class="footer-note" style="margin-top:14px;">'
+        "Forecasts are generated by XGBoost models trained on corridor simulation data. "
+        "Confidence intervals represent 95% prediction bounds. All predictions are stored for continuous improvement."
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_scenario_page(city_config: dict, selected_city: str, input_reset_token: str) -> None:  # noqa: C901
     import plotly.graph_objects as go
     import time as _time
@@ -715,7 +1290,6 @@ def render_scenario_page(city_config: dict, selected_city: str, input_reset_toke
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="glass">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Choose Scenario</div>', unsafe_allow_html=True)
     selected_scenario = st.radio(
         "scenario_picker",
@@ -735,7 +1309,6 @@ def render_scenario_page(city_config: dict, selected_city: str, input_reset_toke
         """,
         unsafe_allow_html=True,
     )
-    st.markdown('</div>', unsafe_allow_html=True)
 
     speed_opt = st.select_slider("Animation speed", options=["0.5x", "1x", "2x", "3x"], value="1x")
     speed_map = {"0.5x": 0.70, "1x": 0.35, "2x": 0.18, "3x": 0.09}
@@ -891,10 +1464,8 @@ def render_scenario_page(city_config: dict, selected_city: str, input_reset_toke
         st.caption("Simulation gradient: green -> yellow -> orange -> red as risk increases.")
 
     with log_col:
-        st.markdown('<div class="glass">', unsafe_allow_html=True)
         st.markdown('<div class="section-title">Simulation Log</div>', unsafe_allow_html=True)
         st.code("\n".join(st.session_state.scen_logs[-14:]), language="text")
-        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown(
         f"<div style='color:#7a9ab4; font-size:0.8rem;'>Current phase: <span style='color:{phase_color};'>{phase_label}</span></div>",
@@ -936,8 +1507,9 @@ class TAQOISApp:
                 </div>
                 <div>
                   <span class="alert-chip" style="background:rgba(67,200,230,0.12); color:#8ed8ea;">3D Geospatial Ops</span>
-                  <span class="alert-chip" style="background:rgba(158,166,255,0.12); color:#c2c7ff;">Intel Engine</span>
-                  <span class="alert-chip" style="background:rgba(102,208,162,0.12); color:#8fe0bc;">Simulation Engine</span>
+                  <span class="alert-chip" style="background:rgba(158,166,255,0.12); color:#c2c7ff;">XGBoost Forecast</span>
+                  <span class="alert-chip" style="background:rgba(102,208,162,0.12); color:#8fe0bc;">Real-Time Ingestion</span>
+                  <span class="alert-chip" style="background:rgba(242,189,109,0.12); color:#f2bd6d;">Decision Support</span>
                 </div>
               </div>
             </div>
@@ -948,12 +1520,12 @@ class TAQOISApp:
     def render_sidebar(self) -> SidebarControls:
         with st.sidebar:
             st.header("TAQOIS Navigation")
-            page = st.radio("page_nav", ["Dashboard", "Scenario Simulation"], label_visibility="collapsed")
+            page = st.radio("page_nav", ["Dashboard", "AI Forecast", "Scenario Simulation"], label_visibility="collapsed")
             st.markdown("---")
-            st.subheader("Simulation Controls")
             selected_city = st.selectbox("City", list(CITY_PRESETS.keys()), index=0)
             st.caption("Use this to switch the simulation focus city.")
 
+            st.subheader("Simulation Controls")
             traffic_volume = st.slider("Traffic Volume", 0, 100, 72)
             inversion_strength = st.slider("Weather Inversion", 0, 100, 58)
             industrial_activity = st.slider("Industrial Activity", 0, 100, 61)
@@ -962,8 +1534,8 @@ class TAQOISApp:
             emergency_event = st.toggle("Special Event / Incident Surge", value=False)
 
             st.markdown("---")
-            st.caption("Deterministic Intel Engine")
-            st.caption("Briefings are generated from simulation data.")
+            st.caption("XGBoost Forecast + Deterministic Sim Engine")
+            st.caption("Forecasts use ML models. Briefings adapt to conditions.")
 
         return SidebarControls(
             page=page,
@@ -994,25 +1566,6 @@ class TAQOISApp:
         status = city_status(avg_risk)
         worst = df.iloc[0]["corridor"]
 
-        st.markdown('<div class="glass">', unsafe_allow_html=True)
-        st.markdown('<div class="section-title">Operator Guide</div>', unsafe_allow_html=True)
-        with st.expander("New user? Click for a simple dashboard walkthrough", expanded=False):
-            st.markdown(
-                """
-                1. Pick a city in the left sidebar.
-                2. Adjust sliders to simulate traffic, weather inversion, industry load, and weather impact.
-                3. Watch the city status cards update in real time.
-                4. On the map: cyan dots show where each corridor is, while colored 3D columns show how serious the risk is.
-                5. Hover a column to see PM2.5, NO2, and risk details.
-                6. Use the AI tabs to get executive summary, response plan, and public health message.
-                """
-            )
-
-        st.info(
-            f"Now monitoring: {controls.selected_city}. This screen shows simulated operational air-risk indicators by corridor, not live regulatory readings yet."
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
-
         st.markdown(
             f"""
             <div class="metric-grid">
@@ -1028,7 +1581,6 @@ class TAQOISApp:
         city_center = city_config["center"]
         col1, col2 = st.columns([1.35, 1])
         with col1:
-            st.markdown('<div class="glass">', unsafe_allow_html=True)
             st.markdown('<div class="section-title">Spatial Intelligence</div>', unsafe_allow_html=True)
             st.subheader("3D Corridor Risk Map")
             deck = pdk.Deck(
@@ -1090,10 +1642,8 @@ class TAQOISApp:
             st.caption(
                 "Map legend: Dot = corridor location. Column height = risk intensity. Column color = risk band (green low, cyan elevated, amber high, red severe)."
             )
-            st.markdown('</div>', unsafe_allow_html=True)
 
         with col2:
-            st.markdown('<div class="glass">', unsafe_allow_html=True)
             st.markdown('<div class="section-title">Threat Analytics</div>', unsafe_allow_html=True)
             st.subheader("Corridor Threat Matrix")
             styled = df[["corridor", "risk_score", "risk_level", "pm25_est", "no2_est", "exposure_index"]].rename(
@@ -1116,7 +1666,6 @@ class TAQOISApp:
                 - **Top concern now**: **{worst}** with risk **{max_risk}**.
                 """
             )
-            st.markdown('</div>', unsafe_allow_html=True)
 
         summary_payload = {
             "city": controls.selected_city,
@@ -1139,17 +1688,11 @@ class TAQOISApp:
         tab1, tab2, tab3 = st.tabs(["Executive Briefing", "Tactical Response Plan", "Public Health Advisory"])
 
         with tab1:
-            st.markdown('<div class="glass">', unsafe_allow_html=True)
             st.write(intel["executive_briefing"])
-            st.markdown('</div>', unsafe_allow_html=True)
         with tab2:
-            st.markdown('<div class="glass">', unsafe_allow_html=True)
             st.write(intel["tactical_response_plan"])
-            st.markdown('</div>', unsafe_allow_html=True)
         with tab3:
-            st.markdown('<div class="glass">', unsafe_allow_html=True)
             st.write(intel["public_health_advisory"])
-            st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown(
             """
@@ -1161,9 +1704,12 @@ class TAQOISApp:
         )
 
     def run(self) -> None:
-        self.render_hero()
         controls = self.render_sidebar()
         city_config = CITY_PRESETS[controls.selected_city]
+
+        if controls.page == "AI Forecast":
+            render_forecast_page(city_config, controls.selected_city, controls)
+            return
 
         if controls.page == "Scenario Simulation":
             scenario_input_token = (
@@ -1173,6 +1719,7 @@ class TAQOISApp:
             render_scenario_page(city_config, controls.selected_city, scenario_input_token)
             return
 
+        self.render_hero()
         self.render_dashboard(controls, city_config)
 
 
